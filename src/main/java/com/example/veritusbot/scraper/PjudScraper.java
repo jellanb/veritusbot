@@ -97,7 +97,9 @@ public class PjudScraper {
         todosLosResultados.add(new String[]{"Nombres", "Apellido Paterno", "Apellido Materno", "Año", "Rol", "Fecha", "Caratulado", "Tribunal"});
 
         // Crear ThreadPool con máximo MAX_THREADS
-        try (ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS)) {
+        @SuppressWarnings("resource")
+        ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
+        try {
             List<Future<?>> futures = new ArrayList<>();
 
             // Crear una tarea por cada año en el rango
@@ -126,6 +128,9 @@ public class PjudScraper {
                     System.err.println("Error en búsqueda paralela: " + e.getMessage());
                 }
             }
+        } finally {
+            // Shutdown del executor
+            executor.shutdown();
         }
 
         // Guardar resultados acumulados
