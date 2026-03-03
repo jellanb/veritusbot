@@ -1,0 +1,26 @@
+{
+  "CAROL MABEL|TORRES|PALMA:2019" : {
+    "persona" : "CAROL MABEL|TORRES|PALMA",
+    "anio" : 2019,
+    "ultimoTribunalProcesado" : 212,
+    "timestamp" : 1772475637017
+  },
+  "ANA MARIA DEL PILAR|CAMPS|RUBILAR:2022" : {
+    "persona" : "ANA MARIA DEL PILAR|CAMPS|RUBILAR",
+    "anio" : 2022,
+    "ultimoTribunalProcesado" : 22,
+    "timestamp" : 1772205028726
+  },
+  "ANA MARIA DEL PILAR|CAMPS|RUBILAR:2019" : {
+    "persona" : "ANA MARIA DEL PILAR|CAMPS|RUBILAR",
+    "anio" : 2019,
+    "ultimoTribunalProcesado" : 26,
+    "timestamp" : 1772205022554
+  },
+  "CAROL MABEL|TORRES|PALMA:2020" : {
+    "persona" : "CAROL MABEL|TORRES|PALMA",
+    "anio" : 2020,
+    "ultimoTribunalProcesado" : 185,
+    "timestamp" : 1772473222745
+  }
+}

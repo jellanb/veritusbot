@@ -1,179 +1,205 @@
-# 🎯 INICIO RÁPIDO - Bot de Búsqueda Judicial
+# 🚀 INICIO RÁPIDO - VERITUS BOT
 
-## ✅ Verificación Previa
+## 📌 En 5 Minutos
 
+### 1️⃣ Asegúrate que SQL Server está corriendo
 ```bash
-# 1. Verificar que estás en el directorio correcto
+podman ps | grep sqlserver
+```
+
+Si no está, inicia:
+```bash
+podman run -d \
+  --name sqlserver \
+  -e "ACCEPT_EULA=Y" \
+  -e "MSSQL_SA_PASSWORD=SqlServer2026Strong" \
+  -p 14333:1433 \
+  mcr.microsoft.com/mssql/server:2022-latest
+```
+
+### 2️⃣ Crea la tabla (si no existe)
+```sql
+CREATE TABLE personas_procesadas (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    primer_nombre NVARCHAR(100) NULL,
+    segundo_nombre NVARCHAR(100) NULL,
+    apellido_paterno NVARCHAR(100) NULL,
+    apellido_materno NVARCHAR(100) NULL,
+    rut NVARCHAR(20) NULL,
+    procesado BIT NULL,
+    creada DATETIME NULL,
+    fecha_procesada DATETIME NULL
+);
+```
+
+### 3️⃣ Ejecuta el bot
+```bash
 cd /Users/jellan/Documents/git/veritusbot
-
-# 2. Verificar que Maven está instalado
-./mvnw --version
-
-# 3. Verificar que Java está instalado
-java -version
+java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
 ```
 
-## 📦 Compilar el Proyecto
-
+### 4️⃣ Inicia búsqueda (otra terminal)
 ```bash
-# Compilar
-./mvnw clean compile
-
-# Esperado: BUILD SUCCESS (sin errores)
+curl "http://localhost:8083/api/buscar-personas?archivo=personas.csv"
 ```
 
-## 🚀 Ejecutar el Bot
-
-### Opción 1: Desde Terminal
-```bash
-./mvnw spring-boot:run
-```
-
-### Opción 2: Desde el IDE
-1. Abre el archivo `VeritusbotApplication.java`
-2. Haz click derecho en la clase
-3. Selecciona "Run" o presiona Shift+F10
-
-## 📊 Ver los Resultados
-
-Una vez que el bot termina:
-
-```bash
-# Ver el archivo CSV generado
-cat resultados_busqueda.csv
-
-# O abrirlo en Excel/Numbers/Google Sheets
-open resultados_busqueda.csv
+### 5️⃣ Verifica resultados
+```sql
+SELECT * FROM personas_procesadas;
+SELECT COUNT(*) as causas FROM causas;
+SELECT * FROM resultados_busqueda.csv;
 ```
 
 ---
 
-## ⚙️ Personalizar la Búsqueda
+## 📊 Cambiar Nivel de Logs
 
-Edita el archivo `PjudScraper.java` en la línea 72:
+### Ver TODO (modo desarrollo)
+```ini
+# En application.properties
+app.environment=desarrollo
+```
 
+### Solo INFO/WARNING/ERROR (modo pruebas)
+```ini
+app.environment=pruebas
+```
+
+### Solo WARNING/ERROR (modo producción)
+```ini
+app.environment=produccion
+```
+
+---
+
+## 🔍 Monitorear Búsqueda
+
+### En otra terminal, ver progreso de BD
+```sql
+-- Ver personas siendo procesadas
+SELECT * FROM personas_procesadas WHERE procesado = 0;
+
+-- Ver personas completadas
+SELECT * FROM personas_procesadas WHERE procesado = 1;
+
+-- Ver causas encontradas
+SELECT COUNT(*) FROM causas;
+
+-- Ver progreso de recuperación
+SELECT * FROM search_progress.json;
+```
+
+---
+
+## ⚙️ Ajustes Útiles
+
+### Cambiar cantidad de navegadores simultáneos
+En `PjudScraper.java`:
 ```java
-// ANTES
-// Buscar MIGUEL ANTONIO SOTO FREDES año 2024
-
-// DESPUÉS - Cambia estos valores:
-targetFrame.fill("#nomNombre", "TU_NOMBRE");
-targetFrame.fill("#nomSegNombre", "SEGUNDO_NOMBRE");
-targetFrame.fill("#nomApPaterno", "APELLIDO_PATERNO");
-targetFrame.fill("#nomApMaterno", "APELLIDO_MATERNO");
-targetFrame.fill("#nomEra", "2024"); // Año
+private static final int MAX_THREADS = 2; // Cambiar aquí (máximo 3)
 ```
 
-## 📈 Entender los Logs
-
-Mientras el bot corre, verás mensajes como:
-
-```
-Se encontraron tribunales con índices de 1 a 231
-
-=== Buscando en tribunal (1/230): 1º Juzgado de Letras de Arica ===
-✓ Botón de búsqueda presionado para: 1º Juzgado de Letras de Arica
-✗ Sin resultados encontrados para: 1º Juzgado de Letras de Arica
-
-=== Buscando en tribunal (2/230): 1º Juzgado De Letras de Arica ex 4° ===
-✓ Botón de búsqueda presionado para: 1º Juzgado De Letras de Arica ex 4°
-✓ Se encontraron 2 causas en: 1º Juzgado De Letras de Arica ex 4°
-
-...
-
-✓ Total de causas guardadas: 125
-✓ Datos guardados en: resultados_busqueda.csv
+### Cambiar delay entre navegadores
+En `PjudScraper.java`:
+```java
+currentDelay += 5; // Cambiar aquí (segundos)
 ```
 
-## 🔍 Estructura del CSV Generado
-
-```csv
-Rol,Fecha,Caratulado,Tribunal
-C-3662-2024,27/02/2024,SANTANDER CONSUMER FINANCE LTDA./SOTO,6º Juzgado Civil de Santiago
-C-1234-2024,15/03/2024,BANCO XYZ./CLIENTE,1º Juzgado Civil de Valparaíso
-...
+### Cambiar puerto del servidor
+En `application.properties`:
+```properties
+server.port=8084  # O el puerto que quieras
 ```
 
 ---
 
-## ❓ Preguntas Frecuentes
+## 🐛 Troubleshooting Rápido
 
-### P: ¿Cuánto tiempo tarda?
-**R**: ~42 minutos (230 tribunales × 11 segundos cada uno)
-
-### P: ¿El CSV se sobrescribe?
-**R**: Sí, en cada ejecución. Hacer backup si es necesario.
-
-### P: ¿Qué pasa si hay timeout?
-**R**: El bot continúa con el siguiente tribunal. Los datos se guardan parcialmente.
-
-### P: ¿Puedo interrumpir la ejecución?
-**R**: Sí, presiona Ctrl+C. Los datos hasta ese punto se guardan.
-
-### P: ¿Dónde aparecen los logs?
-**R**: En la consola del IDE o terminal donde ejecutaste el bot.
-
-### P: ¿Cómo veo si funcionó?
-**R**: Busca "BUILD SUCCESS" al compilar y revisa `resultados_busqueda.csv` cuando termine.
-
----
-
-## 🐛 Si Algo Falla
-
-### Error de compilación
-```bash
-# Limpiar caché
-./mvnw clean
-
-# Compilar nuevamente
-./mvnw compile
+### Bot no inicia
+```
+Verifica que SQL Server esté corriendo: podman ps | grep sqlserver
 ```
 
-### Error "Cannot find frame"
+### Base de datos no conecta
 ```
-→ Significa que el navegador tardó en cargar
-→ Aumenta el timeout en línea 31:
-  .setTimeout(120000) // 120 segundos
-```
-
-### Error "Timeout waiting for selector"
-```
-→ La página tardó en cargar la tabla
-→ Aumenta el tiempo en línea 186:
-  page.waitForTimeout(15000); // 15 segundos
+Verifica usuario/contraseña en application.properties
+Verifica puerto: 14333
 ```
 
-### CSV vacío
+### Tabla no existe
 ```
-→ Significa que no encontró resultados
-→ Prueba con otros datos personales
-→ O verifica que la búsqueda sea correcta
+Ejecuta el SQL CREATE TABLE de arriba
+```
+
+### Logs muy silenciosos
+```
+Cambiar app.environment=desarrollo en application.properties
+```
+
+### Logs muy verbosos
+```
+Cambiar app.environment=produccion en application.properties
 ```
 
 ---
 
-## 📋 Checklist de Verificación
+## 📋 Archivos Importante
 
-- [ ] Terminal abierta en `/Users/jellan/Documents/git/veritusbot`
-- [ ] `./mvnw --version` retorna versión de Maven
-- [ ] `java -version` retorna versión de Java
-- [ ] `./mvnw clean compile` dice BUILD SUCCESS
-- [ ] Personalizaste los datos de búsqueda (opcional)
-- [ ] Listo para ejecutar: `./mvnw spring-boot:run`
+| Archivo | Propósito |
+|---------|-----------|
+| `personas.csv` | Entrada (personas a buscar) |
+| `resultados_busqueda.csv` | Salida (causas encontradas) |
+| `search_progress.json` | Estado (para recuperación) |
+| `application.properties` | Configuración |
 
 ---
 
-## ✨ Bot Listo para Usar
+## 🎯 Resultado Esperado
 
+### Archivos generados
 ```
-┌──────────────────────────────────────┐
-│  ✅ PROYECTO COMPILADO Y VALIDADO  │
-│                                      │
-│  Ejecuta: ./mvnw spring-boot:run    │
-│  Resultado: resultados_busqueda.csv  │
-│  Tiempo: ~42 minutos                 │
-│  Tribunales: 230                     │
-└──────────────────────────────────────┘
+✅ resultados_busqueda.csv (con causas encontradas)
+✅ search_progress.json (temporal, durante búsqueda)
 ```
 
-**¡Listo para iterar por todos los tribunales!** 🚀
+### Datos en BD
+```
+✅ Tabla personas: personas buscadas
+✅ Tabla causas: resultados encontrados
+✅ Tabla personas_procesadas: personas con estado
+```
+
+### Logs
+```
+✅ Guardando personas en tabla personas_procesadas...
+✅ Buscando persona 1/X...
+✅ Marcada como procesada: NOMBRE APELLIDO
+✅ Búsqueda completada
+```
+
+---
+
+## ⏱️ Tiempo Estimado
+
+- **Búsqueda de 1 persona en 1 año, 1 tribunal:** 2-5 minutos
+- **Búsqueda de 1 persona en 1 año, todos tribunales:** 20-40 minutos
+- **Búsqueda de 1 persona en 6 años, todos tribunales:** 120-240 minutos
+- **Búsqueda de 3 personas en 2 años, todos tribunales:** 180-360 minutos
+
+---
+
+## 💡 Tips
+
+- Usa `app.environment=desarrollo` para ver qué está pasando
+- Si algo falla, revisa `search_progress.json` para ver dónde se quedó
+- Los logs muestran "Reanudando desde tribunal X" si recupera
+- Verifica tabla `personas_procesadas` para ver progreso
+
+---
+
+## ✅ Listo
+
+El bot está compilado y listo para usar. Solo ejecuta los 5 pasos de arriba.
+
+**¡Listo para buscar! 🚀**
+
