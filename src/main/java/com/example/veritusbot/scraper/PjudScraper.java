@@ -574,15 +574,6 @@ public class PjudScraper {
                         if (!clickExitoso) {
                             // El botón no se habilitó, es problema del formulario o tribunal
                             logger.warning("   [%d]    ⚠️  No se pudo habilitar botón para: %s (saltando tribunal)", anio, nombreTribunal);
-                            // Intentar reabre el dropdown para el siguiente tribunal
-                            if (i < tribunalesABuscar.size() - 1) {
-                                try {
-                                    abrirDropdownTribunales(targetFrame);
-                                    Thread.sleep(2500);
-                                } catch (Exception e2) {
-                                    logger.debug("   [%d]    Error reabriendo dropdown: %s", anio, e2.getMessage());
-                                }
-                            }
                             continue; // Pasar al siguiente tribunal
                         }
                         logger.debug("   [%d]    ✓ Búsqueda iniciada correctamente", anio);
@@ -647,17 +638,6 @@ public class PjudScraper {
                     if (i < tribunalesABuscar.size() - 1) {
                         logger.debug("   [%d]    ⏳ Preparando siguiente tribunal...", anio);
                         Thread.sleep(800);
-
-                        // SIEMPRE reabre el dropdown para la siguiente búsqueda
-                        logger.debug("   [%d]    📂 Reabriendo dropdown para siguiente tribunal...", anio);
-                        try {
-                            abrirDropdownTribunales(targetFrame);
-                            Thread.sleep(2500);
-                        } catch (Exception e) {
-                            logger.debug("   [%d]    ⚠ Error reabriendo dropdown: %s", anio, e.getMessage());
-                            // Error crítico, no podemos continuar
-                            return false;
-                        }
                     }
 
                 } catch (Exception e) {
