@@ -270,12 +270,59 @@ Agrega resultados a lista compartida (thread-safe)
   - `archivo` (default: personas.csv)
 - **Respuesta:** `✓ Búsqueda completada. Revisa los logs.`
 
+## 📁 Estructura del Proyecto
+
+```
+veritusbot/
+├── src/main/java/com/example/veritusbot/
+│   ├── VeritusbotApplication.java         (Clase principal)
+│   ├── config/
+│   │   ├── WebDriverConfig.java           (Configuración Playwright)
+│   │   ├── DatabaseStartupValidator.java  (Validación de BD)
+│   │   ├── GracefulShutdownConfig.java    (Apagado elegante)
+│   │   └── ResourceCleanupManager.java    (Limpieza de recursos)
+│   ├── controller/
+│   │   └── BusquedaController.java        (Endpoints REST)
+│   ├── model/
+│   │   ├── Causa.java
+│   │   ├── Persona.java
+│   │   └── PersonaProcesada.java
+│   ├── repository/
+│   │   ├── CausaRepository.java
+│   │   ├── PersonaRepository.java
+│   │   └── PersonaProcesadaRepository.java
+│   ├── scraper/
+│   │   ├── PjudScraper.java              (Lógica principal de scraping)
+│   │   ├── SearchProgressManager.java    (Recuperación de progreso)
+│   │   └── WorkingHoursManager.java      (Rango horario de operación)
+│   ├── service/
+│   │   ├── PersonaService.java
+│   │   ├── CausaService.java
+│   │   └── LoggingService.java           (Sistema de logs)
+│   ├── util/
+│   │   ├── ExcelReader.java              (Lectura de Excel)
+│   │   ├── CustomLogger.java             (Logger personalizado)
+│   │   └── LogLevel.java                 (Niveles de log)
+│   └── dto/
+│       ├── PersonaDTO.java
+│       ├── CausaDTO.java
+│       └── RolDTO.java
+├── src/main/resources/
+│   ├── application.properties             (Configuración)
+│   └── logback.xml                       (Configuración de logs)
+├── pom.xml                               (Dependencias Maven)
+├── personas.csv                          (Datos de entrada)
+├── resultados_busqueda.csv               (Resultados de búsqueda)
+└── README.md                             (Este archivo)
+```
+
 ## 📁 Estructura de Datos
 
 ### Entrada (personas.csv)
 ```csv
 NOMBRES,APELLIDO PATERNO,APELLIDO MATERNO,ANIO_INIT,ANIO_FIN
 MIGUEL ANTONIO,SOTO,FREDES,2019,2024
+JUAN CARLOS,GARCÍA,MARTÍNEZ,2020,2023
 ```
 
 ### Salida (resultados_busqueda.csv)
@@ -283,7 +330,6 @@ MIGUEL ANTONIO,SOTO,FREDES,2019,2024
 Nombres,Apellido Paterno,Apellido Materno,Año,Rol,Fecha,Caratulado,Tribunal
 MIGUEL ANTONIO,SOTO,FREDES,2024,C-3662-2024,27/02/2024,SANTANDER CONSUMER FINANCE LTDA./SOTO,6º Juzgado Civil de Santiago
 ```
-
 
 ## 🛑 Shutdown Graceful
 
@@ -300,50 +346,25 @@ GracefulShutdownConfig ejecuta limpieza
 Aplicación se apaga correctamente
 ```
 
-## ⚙️ Configuración de Performance
+## 🔧 Dependencias Principales
 
-### En PjudScraper.java
-```java
-private static final int MAX_THREADS = 3; // Máximo navegadores simultáneos
-// Delay de 3 segundos entre aperturas (automático)
-```
-
-### Timeouts
-- Conexión a BD: 30 segundos
-- Shutdown: 60 segundos
-- Navegación web: 60 segundos
-
-## 🧪 Pruebas Rápidas
-
-### Test 1: Validación de BD
-```bash
-# Detener BD
-podman stop sqlserver
-
-# Ejecutar app (debe fallar con error claro)
-java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
-# Resultado: ❌ ERROR CRÍTICO: NO SE PUDO CONECTAR A LA BASE DE DATOS
-```
-
-### Test 2: Verificar Delays
-```bash
-# Ejecutar búsqueda (con años múltiples)
-curl "http://localhost:8083/api/buscar-personas?archivo=personas.csv"
-
-# En los logs, buscar:
-# 📅 Año 2019 - Se iniciará en: 0 segundos
-# 📅 Año 2020 - Se iniciará en: 3 segundos
-# 📅 Año 2021 - Se iniciará en: 6 segundos
-```
-
-### Test 3: Máximo de Navegadores
-```bash
-# Ver navegadores activos durante búsqueda
-pgrep -c chromium
-# Resultado esperado: máximo 3
-```
+- **Spring Boot:** 3.2.5
+- **Java:** 21+
+- **Microsoft Playwright:** 1.42.0+
+- **JSoup:** 1.17.2+
+- **Microsoft SQL Server JDBC:** Incluido
+- **Maven:** 3.8+
 
 ## 🐛 Troubleshooting
+
+### Error: "Could not find or load main class"
+```bash
+mvn clean compile
+mvn package -DskipTests
+```
+
+### Error: "Schema-validation: missing table"
+Verifica que `spring.jpa.hibernate.ddl-auto=update` en `application.properties`
 
 ### "Cannot connect to BD"
 ```bash
@@ -368,65 +389,53 @@ podman run -d --name sqlserver \
   mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-### "No se encontraron resultados"
-- Es normal si la persona no existe en PJUD
-- Verificar que personas.csv existe en la raíz
-- Verificar que el formato es correcto
-- Revisar los logs para más detalles
+## 🧪 Pruebas Rápidas
 
-## 📈 Dependencias Principales
-
-- **Spring Boot:** 3.2.5
-- **Java:** 17
-- **Microsoft Playwright:** 1.42.0
-- **JSoup:** 1.17.2
-- **Microsoft SQL Server JDBC:** Incluido en Spring
-- **Maven:** 3.6+
-
-## 🔐 Seguridad
-
-- Credenciales SQL Server almacenadas en `application.properties`
-- Para producción, usar variables de entorno
-- Validación de entrada en formularios
-- No hay exposición de datos sensibles en logs
-
-## 📝 Logging
-
-Los logs muestran:
-- Inicio y fin de búsquedas
-- Progreso por persona (cliente)
-- Tiempo de ejecución
-- Años procesados y delays
-- Resultados encontrados
-- Errores detallados si ocurren
-
-Ejemplo:
+### Test 1: Validación de BD
+```bash
+podman stop sqlserver
+java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+# Debe fallar indicando error de conexión
 ```
-╔════════════════════════════════════════════════════════════╗
-║  INICIANDO BÚSQUEDA DE PERSONAS DESDE EXCEL                ║
-║  Hora de inicio: 15:40:00                                  ║
-╚════════════════════════════════════════════════════════════╝
 
-📋 Personas a buscar: 1
-  • PersonaDTO{nombres='MIGUEL ANTONIO', ...}
+### Test 2: Verificar Delays
+```bash
+curl "http://localhost:8083/api/buscar-personas?archivo=personas.csv"
+# Observar logs con delays escalonados
+```
 
-BUSCANDO PERSONA 1/1 | Progreso: 0.0%
-📅 Año 2019 - Se iniciará en: 0 segundos
-📅 Año 2020 - Se iniciará en: 3 segundos
+### Test 3: Máximo de Navegadores
+```bash
+pgrep -c chromium
+# Resultado esperado: máximo 3
+```
 
-✓ Total de causas para este cliente: 2
-✓ CSV actualizado: resultados_busqueda.csv
-✓ Base de datos actualizada
+## 📊 Monitoreo
+
+### Logs en tiempo real
+```bash
+tail -f target/application.log
+```
+
+### Ver navegadores activos
+```bash
+watch -n 1 'pgrep -c chromium'
+```
+
+### Estado de la BD
+```sql
+SELECT COUNT(*) FROM personas_procesadas WHERE procesado = 1;
+SELECT COUNT(*) FROM causas;
 ```
 
 ## 🚀 Deploy en Producción
 
 ### Requisitos
-- Java 17+
-- SQL Server 2022 o superior
-- Acceso a internet (para oficinajudicialvirtual.pjud.cl)
-- Al menos 4GB de RAM
-- 2 cores de CPU
+- Java 21+
+- SQL Server 2022+
+- 4GB RAM mínimo
+- 2 cores CPU
+- Acceso a internet
 
 ### Pasos
 1. Compilar: `mvn clean package`
@@ -435,26 +444,9 @@ BUSCANDO PERSONA 1/1 | Progreso: 0.0%
 4. Asegurar que SQL Server está disponible
 5. Ejecutar: `java -Xmx2G -jar veritusbot-0.0.1-SNAPSHOT.jar`
 
-## 📞 Soporte
-
-Para errores o preguntas:
-1. Revisar logs (muy descriptivos)
-2. Consultar esta documentación
-3. Revisar archivo `compile.log` si hay errores de compilación
-
 ---
 
-**Versión:** 2.0  
-**Última actualización:** 25 Febrero 2026  
+**Versión:** 2.1  
+**Última actualización:** 7 Marzo 2026  
 **Estado:** PRODUCTIVO ✅
 
-## 🚀 Primeros Pasos
-
-1. **Abre:** `SQL_SERVER_INTEGRATION.md` o `INICIO.md`
-2. **Configura:** SQL Server con Podman (instrucciones en los .md)
-3. **Crea:** BD y tablas (scripts en `SQL_SERVER_INTEGRATION.md`)
-4. **Ejecuta:** `./mvnw spring-boot:run`
-
----
-
-**¡El proyecto está 100% completado y listo para usar!**
