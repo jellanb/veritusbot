@@ -22,8 +22,8 @@ public class ExcelService {
      * @param fileName nombre del archivo CSV (ej: "personas.csv")
      * @return lista de PersonaDTO
      */
-    public List<PersonaDTO> leerPersonasDelExcel(String fileName) {
-        List<PersonaDTO> personas = new ArrayList<>();
+    public List<PersonaDTO> readClientFromCSV(String fileName) {
+        List<PersonaDTO> person = new ArrayList<>();
 
         try {
             // Ruta del archivo en la raíz del proyecto
@@ -32,7 +32,7 @@ public class ExcelService {
             if (!file.exists()) {
                 System.err.println("❌ El archivo no existe: " + fileName);
                 System.err.println("   Ruta buscada: " + file.getAbsolutePath());
-                return personas;
+                return person;
             }
 
             System.out.println("📖 Leyendo archivo: " + fileName);
@@ -79,7 +79,7 @@ public class ExcelService {
 
                             if (!nombres.isEmpty() && !apellidoPaterno.isEmpty() && !apellidoMaterno.isEmpty() && anioInit > 0 && anioFin > 0) {
                                 PersonaDTO persona = new PersonaDTO(nombres, apellidoPaterno, apellidoMaterno, anioInit, anioFin);
-                                personas.add(persona);
+                                person.add(persona);
                                 System.out.println("✓ Persona cargada: " + persona);
                             } else {
                                 System.err.println("⚠ Fila " + numeroLinea + " incompleta o con años inválidos");
@@ -93,13 +93,13 @@ public class ExcelService {
                 }
             }
 
-            System.out.println("\n✓ Total de personas cargadas: " + personas.size());
+            System.out.println("\n✓ Total de personas cargadas: " + person.size());
 
         } catch (IOException e) {
             System.err.println("❌ Error leyendo archivo: " + e.getMessage());
         }
 
-        return personas;
+        return person;
     }
 
     /**

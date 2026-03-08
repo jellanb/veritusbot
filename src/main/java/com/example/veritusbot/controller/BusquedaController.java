@@ -16,9 +16,9 @@ public class BusquedaController {
 
     /**
      * Endpoint para buscar personas desde un archivo CSV
-     * GET /api/buscar-personas?archivo=personas.csv
+     * POST /api/buscar-personas?archivo=personas.csv
      */
-    @GetMapping("/api/buscar-personas")
+    @PostMapping("/api/buscar-personas")
     public ResponseEntity<String> buscarPersonas(
             @RequestParam(value = "archivo", defaultValue = "personas.csv") String archivo) {
 
@@ -28,7 +28,7 @@ public class BusquedaController {
             System.out.println("║  Archivo: " + archivo);
             System.out.println("╚════════════════════════════════════════════════════════════╝\n");
 
-            pjudScraper.buscarPersonasDelExcel(archivo);
+            pjudScraper.processClientsFromCSV(archivo);
 
             return ResponseEntity.ok("✓ Búsqueda completada. Revisa los logs.");
 

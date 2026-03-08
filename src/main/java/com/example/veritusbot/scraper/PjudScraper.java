@@ -68,30 +68,30 @@ public class PjudScraper {
      * Solo procesa personas con procesado = 0 o procesado = 1 hace más de 6 meses
      * Respeta el rango horario de 8 AM a 8 PM
      */
-    public void buscarPersonasDelExcel(String nombreArchivo) {
-        LocalDateTime horaInicio = LocalDateTime.now();
-        String horaInicioStr = horaInicio.format(FORMATTER_HORA);
+    public void processClientsFromCSV(String nombreArchivo) {
+        LocalDateTime startTime = LocalDateTime.now();
+        String HourInitStr = startTime.format(FORMATTER_HORA);
 
-        logger.section("INICIANDO BÚSQUEDA DE PERSONAS DESDE EXCEL - " + horaInicioStr);
+        logger.section("INICIANDO BÚSQUEDA DE PERSONAS DESDE EXCEL - " + HourInitStr);
         logger.info("⏰ Rango horario de trabajo: 08:00 - 20:00 (8 AM - 8 PM)");
         logger.info("📋 La aplicación se pausará fuera de este rango y continuará al día siguiente");
 
         // Leer personas del Excel
-        List<PersonaDTO> personas = excelService.leerPersonasDelExcel(nombreArchivo);
+        List<PersonaDTO> person = excelService.readClientFromCSV(nombreArchivo);
 
-        if (personas.isEmpty()) {
+        if (person.isEmpty()) {
             logger.error("No se cargaron personas del Excel");
             return;
         }
 
-        logger.info("Personas en Excel: " + personas.size());
-        for (PersonaDTO persona : personas) {
+        logger.info("Personas en Excel: " + person.size());
+        for (PersonaDTO persona : person) {
             logger.debug("  • " + persona);
         }
 
         // Guardar todas las personas en tabla personas_procesadas (sin procesar aún)
         logger.info("Sincronizando personas con tabla personas_procesadas...");
-        for (PersonaDTO persona : personas) {
+        for (PersonaDTO persona : person) {
             String[] nombres = persona.getNombres().split(" ", 2);
             String primerNombre = nombres.length > 0 ? nombres[0] : "";
             String segundoNombre = nombres.length > 1 ? nombres[1] : "";
@@ -183,7 +183,7 @@ public class PjudScraper {
             logger.info("════════════════════════════════════════════════════════════");
 
             // Obtener los años de búsqueda del Excel
-            PersonaDTO personaExcel = obtenerPersonaDelExcel(personas, personaProcesada);
+            PersonaDTO personaExcel = obtenerPersonaDelExcel(person, personaProcesada);
 
             if (personaExcel != null) {
                 buscarPersona(personaExcel);
@@ -209,12 +209,12 @@ public class PjudScraper {
 
         LocalDateTime horaFin = LocalDateTime.now();
         String horaFinStr = horaFin.format(FORMATTER_HORA);
-        long tiempoTotalSegundos = java.time.temporal.ChronoUnit.SECONDS.between(horaInicio, horaFin);
+        long tiempoTotalSegundos = java.time.temporal.ChronoUnit.SECONDS.between(startTime, horaFin);
         long tiempoMinutos = tiempoTotalSegundos / 60;
         long tiempoSegundos = tiempoTotalSegundos % 60;
 
         logger.section("BÚSQUEDA COMPLETADA");
-        logger.info("Hora de inicio: " + horaInicioStr);
+        logger.info("Hora de inicio: " + HourInitStr);
         logger.info("Hora de fin:    " + horaFinStr);
         logger.info("Tiempo total:   %dm %ds", tiempoMinutos, tiempoSegundos);
         logger.info("Total personas procesadas: " + personasPendientes.size());
@@ -614,11 +614,20 @@ public class PjudScraper {
                                 String caratuladoValue = cols.get(3).text().trim();
                                 String tribunalValue = cols.get(4).text().trim();
 
-                                // Agregar a lista compartida de forma thread-safe
-                                resultadosCompartidos.add(new String[]{
+                                String[] resultado = new String[]{
                                     nombres, apellidoPaterno, apellidoMaterno, String.valueOf(anio),
                                     rolValue, fechaValue, caratuladoValue, tribunalValue
-                                });
+                                };
+
+                                // ✅ GUARDAR INMEDIATAMENTE en CSV y BD
+                                String filePath = "resultados_busqueda.csv";
+                                guardarResultadoEnCSVInmediato(filePath, resultado);
+                                guardarResultadoEnBDInmediato(nombres, apellidoPaterno, apellidoMaterno, resultado);
+
+                                // Agregar a lista compartida también (para compatibilidad)
+                                resultadosCompartidos.add(resultado);
+
+                                logger.info("   [%d]    ✅ Causa guardada INMEDIATAMENTE: %s en %s", anio, rolValue, tribunalValue);
                             }
                         }
 
@@ -904,6 +913,114 @@ public class PjudScraper {
         }
     }
 
+
+    /**
+     * Guarda un resultado individual inmediatamente en CSV sin esperar al final
+     * Agrega una fila al archivo existente sin duplicar encabezado
+     */
+    private synchronized void guardarResultadoEnCSVInmediato(String filePath, String[] resultado) {
+        try {
+            java.io.File file = new java.io.File(filePath);
+
+            // Si no existe el archivo, crear con encabezado
+            if (!file.exists()) {
+                try (FileWriter writer = new FileWriter(filePath)) {
+                    writer.write("Nombres,Apellido Paterno,Apellido Materno,Año,Rol,Fecha,Caratulado,Tribunal\n");
+                }
+            }
+
+            // Agregar la fila al final del archivo
+            try (FileWriter writer = new FileWriter(filePath, true)) {
+                StringBuilder line = new StringBuilder();
+                for (int i = 0; i < resultado.length; i++) {
+                    String field = resultado[i].replace("\"", "\"\"");
+                    if (field.contains(",") || field.contains("\"") || field.contains("\n")) {
+                        line.append("\"").append(field).append("\"");
+                    } else {
+                        line.append(field);
+                    }
+                    if (i < resultado.length - 1) {
+                        line.append(",");
+                    }
+                }
+                writer.write(line.toString());
+                writer.write("\n");
+                writer.flush();
+            }
+        } catch (Exception e) {
+            logger.error("❌ Error guardando resultado en CSV: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * Guarda un resultado individual inmediatamente en BD sin esperar al final
+     * Versión sobrecargada que acepta parámetros de string
+     */
+    private synchronized void guardarResultadoEnBDInmediato(String nombres, String apellidoPaterno,
+                                                            String apellidoMaterno, String[] resultado) {
+        try {
+            // resultado: [0] Nombres, [1] Apellido Paterno, [2] Apellido Materno, [3] Año,
+            // [4] Rol, [5] Fecha, [6] Caratulado, [7] Tribunal
+
+            String[] nombresArray = nombres.split(" ", 2);
+            String primerNombre = nombresArray.length > 0 ? nombresArray[0] : "";
+            String segundoNombre = nombresArray.length > 1 ? nombresArray[1] : "";
+
+            // Buscar o crear persona
+            Optional<Persona> personaExistente = personaRepository.findByPrimerNombreAndSegundoNombreAndApellidoPaternoAndApellidoMaterno(
+                primerNombre,
+                segundoNombre,
+                apellidoPaterno,
+                apellidoMaterno
+            );
+
+            Persona personaGuardada;
+            if (personaExistente.isPresent()) {
+                personaGuardada = personaExistente.get();
+            } else {
+                Persona personaNueva = new Persona(
+                    primerNombre,
+                    segundoNombre,
+                    apellidoPaterno,
+                    apellidoMaterno
+                );
+                personaGuardada = personaRepository.save(personaNueva);
+            }
+
+            // Guardar causa
+            Integer anio = Integer.parseInt(resultado[3]);
+            String rol = resultado[4];
+            String caratula = resultado[6];
+            String tribunal = resultado[7];
+
+            Causa causa = new Causa(
+                personaGuardada.getId(),
+                rol,
+                anio,
+                caratula,
+                tribunal
+            );
+
+            causaRepository.save(causa);
+            logger.debug("   ✓ Causa guardada inmediatamente: %s (%s)", rol, tribunal);
+
+        } catch (Exception e) {
+            logger.error("❌ Error guardando resultado en BD: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * Guarda un resultado individual inmediatamente en BD sin esperar al final
+     * Versión original que acepta PersonaDTO
+     */
+    private synchronized void guardarResultadoEnBDInmediato(PersonaDTO persona, String[] resultado) {
+        guardarResultadoEnBDInmediato(
+            persona.getNombres(),
+            persona.getApellidoPaterno(),
+            persona.getApellidoMaterno(),
+            resultado
+        );
+    }
 
     /**
      * Guarda los datos en un archivo CSV en la raíz del proyecto
