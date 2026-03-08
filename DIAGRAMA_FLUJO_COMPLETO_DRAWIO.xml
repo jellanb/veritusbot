@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" modified="2024-03-08" version="24.1.0" type="device">
+  <diagram id="veritus-flujo-simple" name="Flujo Completo">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="1400" background="ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="titulo" value="VERITUS BOT - FLUJO COMPLETO END-TO-END" style="text;html=1;fontSize=14;fontStyle=bold;fillColor=#1a237e;fontColor=#ffffff;rounded=0;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="150" y="20" width="700" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="inicio" value="1. INICIO: GET /api/buscar-personas" style="ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;fontColor=#ffffff;fontSize=11;fontStyle=bold;" vertex="1" parent="1">
+          <mxGeometry x="250" y="80" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2" value="2. FASE 0: Validar Horario (08:00-20:00)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="160" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="inicio" target="p2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3" value="3. FASE 1-2: Leer CSV + Sincronizar BD personas_procesadas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="240" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p2" target="p3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4" value="4. FASE 2B: Filtrar Pendientes (procesado=0 O más de 6 meses)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="320" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p3" target="p4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5" value="5. FASE 3: Para Cada Persona" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCCC;fontSize=10;fontStyle=bold;" vertex="1" parent="1">
+          <mxGeometry x="250" y="400" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p4" target="p5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6a" value="6a. FASE 4.1: Tribunales Santiago (1º-30º Juzgado Civil)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCB3;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="100" y="480" width="280" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6b" value="6b. FASE 4.2: Otros Tribunales (excluyendo Santiago)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCB3;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="520" y="480" width="280" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c5a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5" target="p6a">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="c5b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p5" target="p6b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7" value="7. FASE 5: ThreadPool Ejecución (MAX 3 threads, delay 5 seg)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="570" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c6a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6a" target="p7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="c6b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p6b" target="p7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7b" value="7b. FASE 5B: Para cada AÑO desde ANOINIT hasta ANOFIN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="250" y="650" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p7" target="p7b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p8" value="8. FASE 6-8: Web Automation (Chrome, PJUD, Formulario)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2F1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="730" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p7b" target="p8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p9" value="9. FASE 9: Buscar + Esperar #loadPreNombre (timeout 10 seg)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2F1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="810" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p8" target="p9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p10" value="10. FASE 10: Extraer con JSoup + Guardar CSV y BD (tabla causas)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="890" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p9" target="p10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p11" value="11. FASE 11: Marcar Completado (procesado=1, tribunal_principal_procesado=1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="970" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p10" target="p11">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fin" value="FIN: Todos Procesados ✓" style="ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;fontColor=#ffffff;fontSize=11;fontStyle=bold;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1060" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="cfin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p11" target="fin">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram><diagram id="veritus-detallado" name="Diagrama Detallado">
+  <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" background="ffffff" math="0" shadow="0">
+    <root>
+      <mxCell id="0"/>
+      <mxCell id="1" parent="0"/>
+      <mxCell id="dtitulo" value="VERITUS BOT - CARACTERÍSTICAS Y DETALLES DEL SISTEMA" style="text;html=1;fontSize=13;fontStyle=bold;fillColor=#1a237e;fontColor=#ffffff;rounded=0;spacing=10;" vertex="1" parent="1">
+        <mxGeometry x="50" y="20" width="1100" height="40" as="geometry"/>
+      </mxCell>
+      <mxCell id="dinfo" value="✓ INICIALIZACION: Validar Horario (08:00-20:00)&#10;✓ LECTURA: Leer CSV personas, sincronizar BD personas_procesadas&#10;✓ FILTRADO: procesado=0 O (procesado=1 Y fecha_procesada &gt; 6 meses)&#10;✓ PROCESAMIENTO: FASE 4.1 (Santiago) PRIMERO, marcar tribunal_principal_procesado=1, luego FASE 4.2&#10;✓ EJECUCION: ThreadPool max 3 threads, delay 5 segundos entre threads&#10;✓ AÑOS: Iterar desde AnoInit hasta AnoFin&#10;✓ WEB AUTOMATION: Chrome, PJUD, cerrar popup, Consulta Causas, Búsqueda por Nombre&#10;✓ FORMULARIO: Seleccionar Competencia, Apellido Paterno, Apellido Materno, Año&#10;✓ DROPDOWN: 231 tribunales - Click tribunal, Buscar&#10;✓ ESPERA: #loadPreNombre (timeout 10 segundos)&#10;✓ EXTRACCION: JSoup - Rol, Fecha, Caratula, Tribunal&#10;✓ ALMACENAMIENTO: CSV + BD (tabla causas y personas)&#10;✓ MARCAR: procesado=1, tribunal_principal_procesado=1, fecha_procesada=NOW()&#10;✓ LOGS: Progreso por cliente, tiempo total, timestamps HH:MM:SS&#10;✓ MODOS: desarrollo (detallados), produccion (esenciales), pruebas (muy detallados)" style="text;html=1;fontSize=9;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#999;rounded=1;spacing=8;padding=10;" vertex="1" parent="1">
+        <mxGeometry x="50" y="70" width="1100" height="680" as="geometry"/>
+      </mxCell>
+    </root>
+  </mxGraphModel>
+</diagram>
+</mxfile>

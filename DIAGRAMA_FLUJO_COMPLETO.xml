@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" modified="2024-03-08" version="24.1.0" type="device">
+  <diagram id="veritus-detallado-flujo" name="Diagrama Detallado del Flujo">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" background="ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="dtitulo" value="VERITUS BOT - CARACTERÍSTICAS Y DETALLES DEL SISTEMA" style="text;html=1;fontSize=13;fontStyle=bold;fillColor=#1a237e;fontColor=#ffffff;rounded=0;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="1100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="dinfo" value="✓ INICIALIZACION: Validar Horario (08:00-20:00)&#10;✓ LECTURA: Leer CSV personas, sincronizar BD personas_procesadas&#10;✓ FILTRADO: procesado=0 O (procesado=1 Y fecha_procesada mayor a 6 meses)&#10;✓ PROCESAMIENTO: FASE 4.1 (Santiago 1-30) PRIMERO, marcar tribunal_principal_procesado=1, luego FASE 4.2&#10;✓ EJECUCION: ThreadPool max 3 threads, delay 5 segundos entre threads&#10;✓ AÑOS: Iterar desde AnoInit hasta AnoFin&#10;✓ WEB AUTOMATION: Chrome, PJUD, cerrar popup, Consulta Causas, Búsqueda por Nombre&#10;✓ FORMULARIO: Seleccionar Competencia, Apellido Paterno, Apellido Materno, Año&#10;✓ DROPDOWN: 231 tribunales - Click tribunal, Buscar&#10;✓ ESPERA: loadPreNombre (timeout 10 segundos)&#10;✓ EXTRACCION: JSoup - Rol, Fecha, Caratula, Tribunal&#10;✓ ALMACENAMIENTO: CSV + BD (tabla causas y personas)&#10;✓ MARCAR: procesado=1, tribunal_principal_procesado=1, fecha_procesada=NOW()&#10;✓ LOGS: Progreso por cliente, tiempo total, timestamps HH:MM:SS&#10;✓ MODOS: desarrollo (detallados), produccion (esenciales), pruebas (muy detallados)" style="text;html=1;fontSize=9;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#999;rounded=1;spacing=8;padding=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="70" width="1100" height="680" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+
