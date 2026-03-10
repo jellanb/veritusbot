@@ -37,7 +37,7 @@ public class PjudScraper {
 
     private static final String URL = "https://oficinajudicialvirtual.pjud.cl/indexN.php";
     private static final DateTimeFormatter FORMATTER_HORA = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final int MAX_THREADS = 1; // Máximo 3 ventanas simultáneas
+    private static final int MAX_THREADS = 3; // Máximo 3 ventanas simultáneas
 
     @Autowired
     private ExcelService excelService;
@@ -151,7 +151,7 @@ public class PjudScraper {
             return;
         }
 
-        // Buscar cada persona respetando rango horario
+        // Buscar cada persona respetando rango horario para la fase 1
         int contador = 1;
         for (PersonaProcesada personaProcesada : personasPendientes) {
             // Verificar rango horario antes de procesar
@@ -186,8 +186,7 @@ public class PjudScraper {
             PersonaDTO personaExcel = obtenerPersonaDelExcel(person, personaProcesada);
 
             if (personaExcel != null) {
-                buscarPersona(personaExcel);
-                marcarPersonaComoProcesada(personaExcel, personaProcesada.getId());
+                buscarPersonaFase1(personaExcel);
             } else {
                 logger.warning("⚠️  No se encontraron datos de búsqueda en Excel para: %s %s",
                     personaProcesada.getPrimerNombre(), personaProcesada.getApellidoPaterno());
@@ -206,6 +205,64 @@ public class PjudScraper {
 
             contador++;
         }
+
+        // Buscar cada persona respetando rango horario para la fase 2
+        contador = 1;
+        for (PersonaProcesada personaProcesada : personasPendientes) {
+            // Verificar rango horario antes de procesar
+            if (!workingHoursManager.estaEnRangoHorario()) {
+                logger.section("⏸️  FUERA DE HORARIO DE TRABAJO");
+                logger.info("Hora actual: " + LocalDateTime.now().format(FORMATTER_HORA));
+                logger.info("Rango: 08:00 - 20:00");
+                logger.info("Estado: " + workingHoursManager.getProximoRangoFormateado());
+
+                long minutos = workingHoursManager.getMinutosHastaSiguienteRango();
+                logger.info("⏳ Esperando %d minutos hasta el próximo rango...", minutos);
+                logger.info("   (La aplicación continuará automáticamente)");
+
+                try {
+                    workingHoursManager.esperarSiguienteRango();
+                    logger.info("✅ Reanudando búsqueda desde el rango horario");
+                } catch (InterruptedException e) {
+                    logger.error("Error esperando siguiente rango: %s", e.getMessage());
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+
+            LocalDateTime horaInicioPersiana = LocalDateTime.now();
+
+            logger.info("════════════════════════════════════════════════════════════");
+            logger.info("BUSCANDO PERSONA %d/%d | Progreso: %.1f%%",
+                    contador, personasPendientes.size(), (contador - 1) * 100.0 / personasPendientes.size());
+            logger.info("════════════════════════════════════════════════════════════");
+
+            // Obtener los años de búsqueda del Excel
+            PersonaDTO personaExcel = obtenerPersonaDelExcel(person, personaProcesada);
+
+            if (personaExcel != null) {
+                buscarPersonaFase2(personaExcel);
+                marcarPersonaComoProcesada(personaExcel, personaProcesada.getId());
+            } else {
+                logger.warning("⚠️  No se encontraron datos de búsqueda en Excel para: %s %s",
+                        personaProcesada.getPrimerNombre(), personaProcesada.getApellidoPaterno());
+            }
+
+            LocalDateTime horaFinPersona = LocalDateTime.now();
+            long segundosTranscurridos = java.time.temporal.ChronoUnit.SECONDS.between(horaInicioPersiana, horaFinPersona);
+            long minutos = segundosTranscurridos / 60;
+            long segundos = segundosTranscurridos % 60;
+
+            double porcentajeAvance = (contador * 100.0) / personasPendientes.size();
+
+            logger.info("✅ CLIENTE %d COMPLETADO", contador);
+            logger.info("   Tiempo de búsqueda: %dm %ds", minutos, segundos);
+            logger.info("   Progreso total: %.1f%% (%d/%d)", porcentajeAvance, contador, personasPendientes.size());
+
+            contador++;
+        }
+
+
 
         LocalDateTime horaFin = LocalDateTime.now();
         String horaFinStr = horaFin.format(FORMATTER_HORA);
@@ -244,7 +301,7 @@ public class PjudScraper {
      * Busca una persona específica usando paralelismo (3 ventanas máximo)
      * Cada ventana busca un año diferente con delay escalonado
      */
-    private void buscarPersona(PersonaDTO persona) {
+    private void buscarPersonaFase1(PersonaDTO persona) {
         logger.info("🔍 Buscando: %s %s %s", persona.getNombres(), persona.getApellidoPaterno(), persona.getApellidoMaterno());
         logger.info("   Rango de años: %d a %d", persona.getAnioInit(), persona.getAnioFin());
         logger.info("   Modo: PARALELO (máximo %d ventanas simultáneas)", MAX_THREADS);
@@ -253,6 +310,13 @@ public class PjudScraper {
         // Primera fase: Tribunales de Santiago
         logger.section("FASE 1: PROCESANDO TRIBUNALES DE SANTIAGO (1º-30º)");
         buscarEnTribunalesConFiltro(persona, true, false);
+    }
+
+    private void buscarPersonaFase2(PersonaDTO persona) {
+        logger.info("🔍 Buscando: %s %s %s", persona.getNombres(), persona.getApellidoPaterno(), persona.getApellidoMaterno());
+        logger.info("   Rango de años: %d a %d", persona.getAnioInit(), persona.getAnioFin());
+        logger.info("   Modo: PARALELO (máximo %d ventanas simultáneas)", MAX_THREADS);
+        logger.debug("   Delay entre navegadores: 5 segundos");
 
         // Segunda fase: Todos los demás tribunales
         logger.section("FASE 2: PROCESANDO OTROS TRIBUNALES (EXCLUYENDO SANTIAGO)");
