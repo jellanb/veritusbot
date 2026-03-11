@@ -2,7 +2,7 @@
 
 ## 🎯 Descripción General
 
-Veritus Bot es una aplicación Spring Boot que automatiza búsquedas de información en el sistema de Oficina Judicial Virtual (PJUD) de Chile. Utiliza Playwright para navegación automática y Chromium headless para scraping de datos.
+Veritus Bot es una aplicación Spring Boot que automatiza búsquedas de información en el sistema de Oficina Judicial Virtual (PJUD) de Chile. Utiliza Playwright para navegación automática y Chromium para scraping de datos.
 
 ## ✨ Características Principales
 
@@ -12,21 +12,22 @@ Veritus Bot es una aplicación Spring Boot que automatiza búsquedas de informac
 - Si la BD NO está disponible → Muestra error y apaga gracefully ❌
 - Implementación: `DatabaseStartupValidator.java`
 
-### 2. Búsqueda Paralela con Delays Controlados
-- Busca información de personas en múltiples años
-- Abre navegadores de forma escalonada (3 segundos entre cada uno)
-- Máximo 3 navegadores simultáneos
-- Evita sobrecargar el servidor de PJUD
-- Implementación: `PjudScraper.java` con `ScheduledExecutorService`
+### 2. Arquitectura Modular y Escalable (NEW)
+- **ScraperOrchestrator:** Punto de entrada que coordina toda la búsqueda
+- **BrowserManager:** Gestión del ciclo de vida de Playwright
+- **FormFiller:** Llena formularios y campos
+- **TribunalSelector:** Maneja dropdown de tribunales
+- **ResultParser:** Parsea resultados HTML
+- **Phase1Scraper:** Búsqueda en tribunales de Santiago (1-30)
+- **Phase2Scraper:** Búsqueda en otros tribunales
+- Implementación: `service/scraper/` con arquitectura SOLID y Dependency Injection
 
-### 3. Búsqueda en Dos Fases por Tribunal
-- **Fase 1:** Procesa primero TODOS los tribunales de Santiago (1º-30º Juzgado Civil de Santiago)
-- **Fase 2:** Procesa el resto de los tribunales (excluyendo Santiago)
-- Después de completar la Fase 1, marca `tribunal_principal_procesado = true` para auditoría
-- Permite priorizar los tribunales más consultados
-- Implementación: `buscarPersona()` → `buscarEnTribunalesConFiltro()` → `buscarPorNombreParaleloConFiltro()`
-- Flujo automático sin intervención del usuario
-- Logs detallados de qué fase se está ejecutando
+### 3. Búsqueda en Dos Fases
+- **Fase 1:** Procesa TODOS los tribunales de Santiago (1º-30º Juzgado Civil)
+- **Fase 2:** Procesa el resto de tribunales (excluyendo Santiago)
+- Después de Fase 1, marca `tribunal_principal_procesado = true`
+- Permite priorizar tribunales más consultados
+- Implementación: `Phase1Scraper` y `Phase2Scraper` ejecutadas por `ScraperOrchestrator`
 
 ### 4. Recuperación Automática de Progreso
 - Guarda el estado después de procesar cada tribunal

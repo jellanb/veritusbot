@@ -34,7 +34,7 @@ public class ScraperOrchestrator {
      */
     public List<ResultDTO> scrapePeople(List<PersonaDTO> people) {
         List<ResultDTO> allResults = new ArrayList<>();
-        Page page = null;
+        Page page;
 
         try {
             logger.info("🚀 Starting scraper orchestrator...");
@@ -56,15 +56,15 @@ public class ScraperOrchestrator {
                     // Execute Phase 1 (search by year - Santiago tribunals)
                     logger.debug("📋 Executing Phase 1 (Santiago tribunals)...");
                     List<ResultDTO> phase1Results = phase1Scraper.execute(page, person.getNombres(),
-                                                                          person.getAnoInit(),
-                                                                          person.getAnoFin());
+                                                                          person.getAnioInit(),
+                                                                          person.getAnioFin());
                     personResults.addAll(phase1Results);
 
                     // Execute Phase 2 (search by tribunal - Other tribunals)
                     logger.debug("📋 Executing Phase 2 (Other tribunals)...");
                     List<ResultDTO> phase2Results = phase2Scraper.execute(page, person.getNombres(),
-                                                                          person.getAnoInit(),
-                                                                          person.getAnoFin());
+                                                                          person.getAnioInit(),
+                                                                          person.getAnioFin());
                     personResults.addAll(phase2Results);
 
                     allResults.addAll(personResults);
