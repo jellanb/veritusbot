@@ -64,13 +64,5 @@ public class BrowserManager {
             logger.error("❌ Error closing browser: ", e);
         }
     }
-
-    /**
-     * Check if browser is open and active
-     * @return true if browser is active
-     */
-    public boolean isBrowserActive() {
-        return browser != null && !browser.isClosed();
-    }
 }
 
