@@ -175,6 +175,12 @@ public class PjudScraper {
                 }
             }
 
+            if (Boolean.TRUE.equals(personaProcesada.getTribunalPrincipalProcesado())) {
+                logger.info("PERSONA %s YA PROCESADA PARA FASE 1",
+                        personaProcesada.getPrimerNombre() + " " + personaProcesada.getApellidoPaterno());
+                continue;
+            }
+
             LocalDateTime horaInicioPersiana = LocalDateTime.now();
 
             logger.info("════════════════════════════════════════════════════════════");
@@ -588,6 +594,13 @@ public class PjudScraper {
             // Buscar en cada tribunal de la lista
             for (int i = 0; i < tribunalesABuscar.size(); i++) {
                 String nombreTribunal = tribunalesABuscar.get(i);
+
+                // ✅ SALTAR: "Seleccione Tribunal..." es un placeholder, no un tribunal real
+                if (nombreTribunal.contains("Seleccione") || nombreTribunal.trim().isEmpty()) {
+                    logger.debug("   [%d] ⏭️  Saltando placeholder: %s", anio, nombreTribunal);
+                    continue;
+                }
+
                 try {
                     // Obtener el índice del tribunal desde el mapa
                     Integer indexTribunal = todosTribunales.get(nombreTribunal);
