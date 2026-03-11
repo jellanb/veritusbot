@@ -3,6 +3,8 @@ package com.example.veritusbot.service.scraper;
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
+import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
+import com.example.veritusbot.service.scraper.phases.Phase2Scraper;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,11 +16,15 @@ public class ScraperOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(ScraperOrchestrator.class);
 
     private final BrowserManager browserManager;
-    // Phase1Scraper and Phase2Scraper will be implemented after
-    // For now, this is the structure
+    private final Phase1Scraper phase1Scraper;
+    private final Phase2Scraper phase2Scraper;
 
-    public ScraperOrchestrator(BrowserManager browserManager) {
+    public ScraperOrchestrator(BrowserManager browserManager,
+                               Phase1Scraper phase1Scraper,
+                               Phase2Scraper phase2Scraper) {
         this.browserManager = browserManager;
+        this.phase1Scraper = phase1Scraper;
+        this.phase2Scraper = phase2Scraper;
     }
 
     /**
@@ -35,8 +41,11 @@ public class ScraperOrchestrator {
             page = browserManager.launchBrowser();
             browserManager.navigateTo(page, "https://oficinajudicialvirtual.pjud.cl/home/index.php");
 
+            int counter = 1;
             for (PersonaDTO person : people) {
-                logger.info("🔍 Processing: {} {} {}",
+                logger.info("🔍 [{}/{}] Processing: {} {} {}",
+                    counter,
+                    people.size(),
                     person.getNombres(),
                     person.getApellidoPaterno(),
                     person.getApellidoMaterno());
@@ -46,23 +55,29 @@ public class ScraperOrchestrator {
                 try {
                     // Execute Phase 1 (search by year - Santiago tribunals)
                     logger.debug("📋 Executing Phase 1 (Santiago tribunals)...");
-                    personResults.addAll(
-                        executePhase1(page, person)
-                    );
+                    List<ResultDTO> phase1Results = phase1Scraper.execute(page, person.getNombres(),
+                                                                          person.getAnoInit(),
+                                                                          person.getAnoFin());
+                    personResults.addAll(phase1Results);
 
                     // Execute Phase 2 (search by tribunal - Other tribunals)
                     logger.debug("📋 Executing Phase 2 (Other tribunals)...");
-                    personResults.addAll(
-                        executePhase2(page, person)
-                    );
+                    List<ResultDTO> phase2Results = phase2Scraper.execute(page, person.getNombres(),
+                                                                          person.getAnoInit(),
+                                                                          person.getAnoFin());
+                    personResults.addAll(phase2Results);
 
                     allResults.addAll(personResults);
                     logger.info("✅ Person processed: {} results found", personResults.size());
 
                 } catch (Exception e) {
-                    logger.error("❌ Error processing person: {} {}",
-                        person.getNombres(), e.getMessage());
+                    logger.error("❌ Error processing person: {} {} - {}",
+                        person.getNombres(),
+                        person.getApellidoPaterno(),
+                        e.getMessage());
                 }
+
+                counter++;
             }
 
             logger.info("✅ Scraping completed. Total results: {}", allResults.size());
@@ -74,28 +89,6 @@ public class ScraperOrchestrator {
         }
 
         return allResults;
-    }
-
-    /**
-     * Execute Phase 1: Search in Santiago tribunals (1-30)
-     * @param page Playwright page
-     * @param person Person to search
-     * @return List of results from Phase 1
-     */
-    private List<ResultDTO> executePhase1(Page page, PersonaDTO person) {
-        // Will be implemented in Phase1Scraper
-        return new ArrayList<>();
-    }
-
-    /**
-     * Execute Phase 2: Search in other tribunals (31+)
-     * @param page Playwright page
-     * @param person Person to search
-     * @return List of results from Phase 2
-     */
-    private List<ResultDTO> executePhase2(Page page, PersonaDTO person) {
-        // Will be implemented in Phase2Scraper
-        return new ArrayList<>();
     }
 }
 

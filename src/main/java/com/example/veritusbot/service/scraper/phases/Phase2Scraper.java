@@ -1,9 +1,11 @@
 package com.example.veritusbot.service.scraper.phases;
 
 import com.example.veritusbot.dto.ResultDTO;
+import com.example.veritusbot.service.scraper.browser.FrameNavigator;
 import com.example.veritusbot.service.scraper.form.FormFiller;
 import com.example.veritusbot.service.scraper.form.TribunalSelector;
 import com.example.veritusbot.service.scraper.parser.ResultParser;
+import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,11 +22,14 @@ public class Phase2Scraper implements Phase {
     private final FormFiller formFiller;
     private final TribunalSelector tribunalSelector;
     private final ResultParser resultParser;
+    private final FrameNavigator frameNavigator;
 
-    public Phase2Scraper(FormFiller formFiller, TribunalSelector tribunalSelector, ResultParser resultParser) {
+    public Phase2Scraper(FormFiller formFiller, TribunalSelector tribunalSelector,
+                         ResultParser resultParser, FrameNavigator frameNavigator) {
         this.formFiller = formFiller;
         this.tribunalSelector = tribunalSelector;
         this.resultParser = resultParser;
+        this.frameNavigator = frameNavigator;
     }
 
     @Override
@@ -32,9 +37,78 @@ public class Phase2Scraper implements Phase {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
-            logger.info("▶️  Starting Phase 2 (Other tribunals)...");
-            // Implementation will be moved from PjudScraper
-            // Focus on filtering tribunals WITHOUT "Santiago" in the name
+            logger.info("▶️  Starting Phase 2 (Other tribunals - excluding Santiago)...");
+
+            // Navigate to search form
+            frameNavigator.navigateToSearchForm(page);
+
+            // Get search frame
+            Frame searchFrame = frameNavigator.getSearchFrame(page);
+            if (searchFrame == null) {
+                searchFrame = page.mainFrame();
+            }
+
+            // Click search by name tab
+            frameNavigator.clickSearchByNameTab(searchFrame);
+
+            // Set competence to Civil
+            frameNavigator.setCompetenceToCivil(searchFrame);
+
+            // Fill form with person data
+            formFiller.fillSearchForm(searchFrame, personName, startYear);
+
+            // Open dropdown and load tribunals
+            tribunalSelector.openDropdown(searchFrame);
+            page.waitForTimeout(1500);
+            Map<String, Integer> allTribunals = tribunalSelector.loadAllTribunals(searchFrame);
+
+            // Filter to exclude Santiago tribunals
+            List<String> otherTribunals = filterOtherTribunals(allTribunals);
+
+            if (otherTribunals.isEmpty()) {
+                logger.warn("⚠ No other tribunals found");
+                return results;
+            }
+
+            logger.info("📋 Phase 2: Found {} other tribunals", otherTribunals.size());
+
+            // Search in each tribunal
+            for (String tribunalName : otherTribunals) {
+                try {
+                    Integer tribunalIndex = allTribunals.get(tribunalName);
+                    if (tribunalIndex == null) {
+                        continue;
+                    }
+
+                    logger.debug("🔍 Searching in: {} (index: {})", tribunalName, tribunalIndex);
+
+                    // Open dropdown
+                    tribunalSelector.openDropdown(searchFrame);
+                    page.waitForTimeout(500);
+
+                    // Select tribunal
+                    tribunalSelector.selectTribunal(searchFrame, tribunalName, tribunalIndex);
+                    page.waitForTimeout(2000);
+
+                    // Submit search
+                    formFiller.submitForm(searchFrame);
+                    page.waitForTimeout(15000);
+
+                    // Parse results
+                    String html = page.content();
+                    List<ResultDTO> tribunalResults = resultParser.parseResults(html, personName, startYear, tribunalName);
+                    results.addAll(tribunalResults);
+
+                    if (!tribunalResults.isEmpty()) {
+                        logger.debug("✅ Found {} results in {}", tribunalResults.size(), tribunalName);
+                    }
+
+                } catch (Exception e) {
+                    logger.warn("⚠ Error searching tribunal {}: {}", tribunalName, e.getMessage());
+                }
+            }
+
+            logger.info("✓ Phase 2 completed. Found {} results", results.size());
 
         } catch (Exception e) {
             logger.error("❌ Error in Phase 2: ", e);
@@ -43,9 +117,24 @@ public class Phase2Scraper implements Phase {
         return results;
     }
 
+    /**
+     * Filter tribunals that do NOT contain "Santiago" in the name
+     */
+    private List<String> filterOtherTribunals(Map<String, Integer> allTribunals) {
+        List<String> others = new ArrayList<>();
+        for (String name : allTribunals.keySet()) {
+            if (!name.contains("Santiago") && !name.contains("Seleccione")) {
+                others.add(name);
+            }
+        }
+        return others;
+    }
+
     @Override
     public String getPhaseName() {
-        return "Phase 2: Other Tribunals";
+        return "Phase 2: Other Tribunals (excluding Santiago)";
     }
 }
+
+
 
