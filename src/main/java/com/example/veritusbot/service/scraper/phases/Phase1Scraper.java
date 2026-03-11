@@ -49,10 +49,10 @@ public class Phase1Scraper implements Phase {
             }
 
             // Click search by name tab
-            frameNavigator.clickSearchByNameTab(searchFrame);
+            frameNavigator.clickSearchByNameTab(searchFrame, page);
 
             // Set competence to Civil
-            frameNavigator.setCompetenceToCivil(searchFrame);
+            frameNavigator.setCompetenceToCivil(searchFrame, page);
 
             // Fill form with person data
             formFiller.fillSearchForm(searchFrame, personName, startYear);

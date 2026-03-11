@@ -36,7 +36,17 @@ public class FrameNavigator {
             logger.debug("🔍 Getting search frame...");
 
             // Try multiple selectors for the iframe
-            Frame frame = page.frameByName("iframeConsultaTriInicial");
+            Frame frame = null;
+
+            // Try to find frame by name
+            for (Frame f : page.frames()) {
+                if (f.name() != null && f.name().equals("iframeConsultaTriInicial")) {
+                    frame = f;
+                    break;
+                }
+            }
+
+            // If not found by name, try to find by URL
             if (frame == null) {
                 frame = page.frames().stream()
                     .filter(f -> f.url().contains("pjud"))
@@ -61,13 +71,14 @@ public class FrameNavigator {
     /**
      * Click on the "Search by Name" tab
      * @param frame Target frame
+     * @param page Current page
      */
-    public void clickSearchByNameTab(Frame frame) {
+    public void clickSearchByNameTab(Frame frame, Page page) {
         try {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
             frame.waitForSelector("a:has-text('Nombre')");
             frame.locator("a:has-text('Nombre')").click();
-            frame.page().waitForTimeout(1500);
+            page.waitForTimeout(1500);
             logger.debug("✓ Tab clicked");
         } catch (Exception e) {
             logger.error("❌ Error clicking search tab: ", e);
@@ -78,13 +89,14 @@ public class FrameNavigator {
     /**
      * Set competence to Civil (value: 3)
      * @param frame Target frame
+     * @param page Current page
      */
-    public void setCompetenceToCivil(Frame frame) {
+    public void setCompetenceToCivil(Frame frame, Page page) {
         try {
             logger.debug("⚖️  Setting competence to Civil...");
             frame.waitForSelector("select[name='nomCompetencia']");
             frame.locator("select[name='nomCompetencia']").selectOption("3");
-            frame.page().waitForTimeout(1000);
+            page.waitForTimeout(1000);
             logger.debug("✓ Competence set to Civil");
         } catch (Exception e) {
             logger.error("❌ Error setting competence: ", e);
