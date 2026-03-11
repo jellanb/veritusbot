@@ -14,107 +14,107 @@ import java.util.List;
 public class ExcelService {
 
     /**
-     * Lee un archivo CSV y retorna una lista de PersonaDTO
-     * El archivo debe estar en la raíz del proyecto
-     * Formato CSV: Nombres;Apellido Paterno;Apellido Materno;AnoInit;AnoFin
-     * (Usa punto y coma como separador)
+     * Read a CSV file and return a list of PersonaDTO
+     * File must be located in project root
+     * CSV Format: Names;Last Name;Mother's Last Name;StartYear;EndYear
+     * (Uses semicolon as separator)
      *
-     * @param fileName nombre del archivo CSV (ej: "personas.csv")
-     * @return lista de PersonaDTO
+     * @param fileName CSV file name (ex: "personas.csv")
+     * @return List of PersonaDTO objects
      */
     public List<PersonaDTO> readClientFromCSV(String fileName) {
-        List<PersonaDTO> person = new ArrayList<>();
+        List<PersonaDTO> people = new ArrayList<>();
 
         try {
-            // Ruta del archivo en la raíz del proyecto
+            // File path in project root
             File file = new File(fileName);
 
             if (!file.exists()) {
-                System.err.println("❌ El archivo no existe: " + fileName);
-                System.err.println("   Ruta buscada: " + file.getAbsolutePath());
-                return person;
+                System.err.println("❌ File not found: " + fileName);
+                System.err.println("   Expected path: " + file.getAbsolutePath());
+                return people;
             }
 
-            System.out.println("📖 Leyendo archivo: " + fileName);
-            System.out.println("   Ruta: " + file.getAbsolutePath());
+            System.out.println("📖 Reading file: " + fileName);
+            System.out.println("   Path: " + file.getAbsolutePath());
 
-            // Leer el archivo CSV
+            // Read CSV file
             try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                String linea;
-                int numeroLinea = 0;
+                String line;
+                int lineNumber = 0;
 
-                while ((linea = reader.readLine()) != null) {
-                    numeroLinea++;
+                while ((line = reader.readLine()) != null) {
+                    lineNumber++;
 
-                    // Saltar encabezado
-                    if (numeroLinea == 1) {
-                        System.out.println("📊 Encabezado encontrado: " + linea);
+                    // Skip header
+                    if (lineNumber == 1) {
+                        System.out.println("📊 Header found: " + line);
                         continue;
                     }
 
                     try {
-                        // Parsear la línea CSV
-                        String[] valores = parsearCSV(linea);
+                        // Parse CSV line
+                        String[] values = parseCSV(line);
 
-                        if (valores.length >= 5) {
-                            String nombres = valores[0].trim();
-                            String apellidoPaterno = valores[1].trim();
-                            String apellidoMaterno = valores[2].trim();
-                            int anioInit;
-                            int anioFin;
+                        if (values.length >= 5) {
+                            String names = values[0].trim();
+                            String lastNamePaternal = values[1].trim();
+                            String lastNameMaternal = values[2].trim();
+                            int startYear;
+                            int endYear;
 
                             try {
-                                anioInit = Integer.parseInt(valores[3].trim());
+                                startYear = Integer.parseInt(values[3].trim());
                             } catch (NumberFormatException e) {
-                                System.err.println("⚠ Error en AnoInit (línea " + numeroLinea + "): " + e.getMessage());
+                                System.err.println("⚠ Error in StartYear (line " + lineNumber + "): " + e.getMessage());
                                 continue;
                             }
 
                             try {
-                                anioFin = Integer.parseInt(valores[4].trim());
+                                endYear = Integer.parseInt(values[4].trim());
                             } catch (NumberFormatException e) {
-                                System.err.println("⚠ Error en AnoFin (línea " + numeroLinea + "): " + e.getMessage());
+                                System.err.println("⚠ Error in EndYear (line " + lineNumber + "): " + e.getMessage());
                                 continue;
                             }
 
-                            if (!nombres.isEmpty() && !apellidoPaterno.isEmpty() && !apellidoMaterno.isEmpty() && anioInit > 0 && anioFin > 0) {
-                                PersonaDTO persona = new PersonaDTO(nombres, apellidoPaterno, apellidoMaterno, anioInit, anioFin);
-                                person.add(persona);
-                                System.out.println("✓ Persona cargada: " + persona);
+                            if (!names.isEmpty() && !lastNamePaternal.isEmpty() && !lastNameMaternal.isEmpty() && startYear > 0 && endYear > 0) {
+                                PersonaDTO person = new PersonaDTO(names, lastNamePaternal, lastNameMaternal, startYear, endYear);
+                                people.add(person);
+                                System.out.println("✓ Person loaded: " + person);
                             } else {
-                                System.err.println("⚠ Fila " + numeroLinea + " incompleta o con años inválidos");
+                                System.err.println("⚠ Line " + lineNumber + " incomplete or has invalid years");
                             }
                         } else {
-                            System.err.println("⚠ Fila " + numeroLinea + " con formato incorrecto (esperaba 5 columnas, encontró " + valores.length + ")");
+                            System.err.println("⚠ Line " + lineNumber + " has incorrect format (expected 5 columns, found " + values.length + ")");
                         }
                     } catch (Exception e) {
-                        System.err.println("❌ Error procesando fila " + numeroLinea + ": " + e.getMessage());
+                        System.err.println("❌ Error processing line " + lineNumber + ": " + e.getMessage());
                     }
                 }
             }
 
-            System.out.println("\n✓ Total de personas cargadas: " + person.size());
+            System.out.println("\n✓ Total people loaded: " + people.size());
 
         } catch (IOException e) {
-            System.err.println("❌ Error leyendo archivo: " + e.getMessage());
+            System.err.println("❌ Error reading file: " + e.getMessage());
         }
 
-        return person;
+        return people;
     }
 
     /**
-     * Parsea una línea CSV simple usando punto y coma como separador
-     * Formato: Nombres;Apellido Paterno;Apellido Materno;AnoInit;AnoFin
+     * Parse a CSV line using semicolon as separator
+     * Format: Names;Last Name;Mother's Last Name;StartYear;EndYear
      */
-    private String[] parsearCSV(String linea) {
-        // Separar por punto y coma (;)
-        String[] valores = linea.split(";");
+    private String[] parseCSV(String line) {
+        // Split by semicolon (;)
+        String[] values = line.split(";");
 
-        // Trim a cada valor
-        for (int i = 0; i < valores.length; i++) {
-            valores[i] = valores[i].trim();
+        // Trim each value
+        for (int i = 0; i < values.length; i++) {
+            values[i] = values[i].trim();
         }
 
-        return valores;
+        return values;
     }
 }
