@@ -17,16 +17,46 @@ public class TribunalSelector {
      * @param frame Target frame
      */
     public void openDropdown(Frame frame) {
+
+        // Close previous dropdown
+        try {
+            frame.evaluate("() => { document.activeElement.blur(); }");
+            Thread.sleep(300);
+        } catch (Exception e) {
+            // Nothing to close
+        }
+
         try {
             logger.debug("📂 Opening tribunal dropdown...");
-            Locator button = frame.locator("button[data-toggle='dropdown']");
-            if (button.count() > 0) {
-                button.first().click();
-                frame.waitForSelector("ul.dropdown-menu.inner", new Frame.WaitForSelectorOptions().setTimeout(5000));
-                logger.debug("✓ Dropdown opened successfully");
-            } else {
-                logger.warn("⚠ Dropdown button not found");
+
+            Locator selectButton = frame.locator("button[data-toggle='dropdown'][aria-haspopup='listbox']").first();
+            if (selectButton.count() == 0) {
+                selectButton = frame.locator("button.dropdown-toggle");
             }
+            if (selectButton.count() == 0) {
+                selectButton = frame.locator("button:has-text('Seleccione')");
+            }
+
+            if (selectButton.count() == 0) {
+                throw new PlaywrightException("No se encontró botón del dropdown");
+            }
+
+            // Esperar y hacer click
+            selectButton.first().waitFor(new Locator.WaitForOptions().setTimeout(3000));
+            selectButton.first().click(new Locator.ClickOptions().setTimeout(3000));
+
+            frame.waitForSelector("ul.dropdown-menu.inner", new Frame.WaitForSelectorOptions()
+                    .setTimeout(8000));
+
+            // Espera adicional: asegurar que elementos están clickeables
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            logger.debug("✓ Dropdown opened successfully");
+
         } catch (Exception e) {
             logger.error("❌ Error opening dropdown: ", e);
             throw new RuntimeException("Failed to open dropdown", e);
@@ -87,14 +117,15 @@ public class TribunalSelector {
             }
 
             String selector = String.format("li[data-original-index=\"%d\"] a", index);
+            frame.locator(selector).first().waitFor(new Locator.WaitForOptions().setTimeout(5000));
             logger.debug("🖱️  Selecting tribunal: {} (index: {})", tribunalName, index);
 
             Locator element = frame.locator(selector);
             if (element.count() > 0) {
-                element.first().waitFor(new Locator.WaitForOptions().setTimeout(5000));
+                element.first().waitFor(new Locator.WaitForOptions().setTimeout(10000));
                 element.first().scrollIntoViewIfNeeded();
                 Thread.sleep(500);
-                element.first().click();
+                element.first().click(new Locator.ClickOptions().setTimeout(5000));
                 logger.debug("✓ Tribunal selected successfully");
             } else {
                 logger.warn("⚠ Tribunal element not found: {}", tribunalName);

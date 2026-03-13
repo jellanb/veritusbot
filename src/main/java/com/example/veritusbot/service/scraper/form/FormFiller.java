@@ -1,5 +1,6 @@
 package com.example.veritusbot.service.scraper.form;
 
+import com.example.veritusbot.dto.PersonaDTO;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import org.slf4j.Logger;
@@ -13,14 +14,16 @@ public class FormFiller {
     /**
      * Fill the search form with person data
      * @param frame Target frame containing the form
-     * @param names Person names
+     * @param person Person to search
      * @param year Year to search
      */
-    public void fillSearchForm(Frame frame, String names, int year) {
+    public void fillSearchForm(Frame frame, PersonaDTO person, int year) {
         try {
-            logger.debug("📝 Filling search form for: {} (year: {})", names, year);
+            logger.debug("📝 Filling search form for: {} (year: {})", person.getNombres(), year);
 
-            frame.fill("input[name='nomNombre']", names);
+            frame.fill("input[name='nomNombre']", person.getNombres());
+            frame.fill("input[name='nomApePaterno']", person.getApellidoPaterno());
+            frame.fill("input[name='nomApeMaterno']", person.getApellidoMaterno());
             frame.fill("input[id='nomEra']", String.valueOf(year));
 
             logger.debug("✓ Form filled successfully");
@@ -53,7 +56,7 @@ public class FormFiller {
     public void submitForm(Frame frame) {
         try {
             logger.debug("🔍 Submitting search form...");
-            Locator submitButton = frame.locator("button[type='submit']");
+            Locator submitButton = frame.locator("#btnConConsultaNom");
             if (submitButton.count() > 0) {
                 submitButton.click();
                 logger.debug("✓ Form submitted successfully");

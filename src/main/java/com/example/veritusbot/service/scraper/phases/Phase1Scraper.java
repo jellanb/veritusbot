@@ -1,5 +1,6 @@
 package com.example.veritusbot.service.scraper.phases;
 
+import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.scraper.browser.FrameNavigator;
 import com.example.veritusbot.service.scraper.form.FormFiller;
@@ -33,7 +34,7 @@ public class Phase1Scraper implements Phase {
     }
 
     @Override
-    public List<ResultDTO> execute(Page page, String personName, int startYear, int endYear) {
+    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear) {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
@@ -55,7 +56,7 @@ public class Phase1Scraper implements Phase {
             frameNavigator.setCompetenceToCivil(searchFrame, page);
 
             // Fill form with person data
-            formFiller.fillSearchForm(searchFrame, personName, startYear);
+            formFiller.fillSearchForm(searchFrame, person, startYear);
 
             // Open dropdown and load tribunals
             tribunalSelector.openDropdown(searchFrame);
@@ -96,7 +97,7 @@ public class Phase1Scraper implements Phase {
 
                     // Parse results
                     String html = page.content();
-                    List<ResultDTO> tribunalResults = resultParser.parseResults(html, personName, startYear, tribunalName);
+                    List<ResultDTO> tribunalResults = resultParser.parseResults(html, person, startYear, tribunalName);
                     results.addAll(tribunalResults);
 
                     if (!tribunalResults.isEmpty()) {

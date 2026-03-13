@@ -1,5 +1,6 @@
 package com.example.veritusbot.service.scraper.parser;
 
+import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -17,12 +18,12 @@ public class ResultParser {
     /**
      * Parse search results from HTML content
      * @param htmlContent HTML content to parse
-     * @param personName Name of the person searched
+     * @param person person searched
      * @param year Year of search
      * @param tribunal Tribunal name
      * @return List of results found
      */
-    public List<ResultDTO> parseResults(String htmlContent, String personName, int year, String tribunal) {
+    public List<ResultDTO> parseResults(String htmlContent, PersonaDTO person, int year, String tribunal) {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
@@ -32,7 +33,7 @@ public class ResultParser {
             // Check for "no results" message
             Element noResultsMessage = doc.selectFirst("tbody#verDetalleNombre tr td[colspan='5']");
             if (noResultsMessage != null && noResultsMessage.text().contains("No se han encontrado resultados")) {
-                logger.debug("ℹ️  No results found for: {}", personName);
+                logger.debug("ℹ️  No results found for: {}", person.getNombres());
                 return results;
             }
 
@@ -54,7 +55,7 @@ public class ResultParser {
                     String tribunalValue = cols.get(4).text().trim();
 
                     ResultDTO result = new ResultDTO(
-                        personName,
+                        person.getNombres(),
                         tribunalValue,
                         year,
                         resolution,

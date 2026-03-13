@@ -86,7 +86,7 @@ public class ScraperOrchestrator {
 
             try {
                 // Execute phase for this person
-                List<ResultDTO> personResults = phase.execute(page, person.getNombres(),
+                List<ResultDTO> personResults = phase.execute(page, person,
                                                               person.getAnioInit(),
                                                               person.getAnioFin());
                 phaseResults.addAll(personResults);
