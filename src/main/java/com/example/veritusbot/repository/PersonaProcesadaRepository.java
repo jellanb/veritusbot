@@ -21,6 +21,12 @@ public interface PersonaProcesadaRepository extends JpaRepository<PersonaProcesa
      * Obtiene todas las personas para filtrar en Java
      */
     List<PersonaProcesada> findAll();
+
+    /**
+     * Obtiene todas las personas donde tribunal_principal_procesado es null o false
+     */
+    @Query("SELECT p FROM PersonaProcesada p WHERE p.tribunalPrincipalProcesado IS NULL OR p.tribunalPrincipalProcesado = false")
+    List<PersonaProcesada> findPersonasWithoutTribunalPrincipalProcessed();
 }
 
 
