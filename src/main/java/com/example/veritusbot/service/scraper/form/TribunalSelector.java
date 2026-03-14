@@ -18,14 +18,6 @@ public class TribunalSelector {
      */
     public void openDropdown(Frame frame) {
 
-        // Close previous dropdown
-        try {
-            frame.evaluate("() => { document.activeElement.blur(); }");
-            Thread.sleep(300);
-        } catch (Exception e) {
-            // Nothing to close
-        }
-
         try {
             logger.debug("📂 Opening tribunal dropdown...");
 
@@ -61,6 +53,7 @@ public class TribunalSelector {
             logger.error("❌ Error opening dropdown: ", e);
             throw new RuntimeException("Failed to open dropdown", e);
         }
+
     }
 
     /**
@@ -144,15 +137,24 @@ public class TribunalSelector {
     public void closeDropdown(Frame frame) {
         try {
             logger.debug("📂 Closing dropdown...");
-            frame.evaluate("""
-                (function() {
-                    const dropdowns = document.querySelectorAll('.dropdown-menu');
-                    dropdowns.forEach(el => {
-                        el.classList.remove('show', 'open');
-                    });
-                })()
-            """);
-            logger.debug("✓ Dropdown closed");
+
+            // Click the dropdown button again to close it (toggle)
+            Locator selectButton = frame.locator("button[data-toggle='dropdown'][aria-haspopup='listbox']").first();
+            if (selectButton.count() == 0) {
+                selectButton = frame.locator("button.dropdown-toggle");
+            }
+            if (selectButton.count() == 0) {
+                selectButton = frame.locator("button:has-text('Seleccione')");
+            }
+
+            if (selectButton.count() > 0) {
+                selectButton.first().click(new Locator.ClickOptions().setTimeout(3000));
+                Thread.sleep(300);
+                logger.debug("✓ Dropdown closed successfully");
+            } else {
+                logger.warn("⚠ Could not find dropdown button to close");
+            }
+
         } catch (Exception e) {
             logger.warn("⚠ Error closing dropdown: {}", e.getMessage());
         }

@@ -63,6 +63,9 @@ public class Phase1Scraper implements Phase {
             page.waitForTimeout(1500);
             Map<String, Integer> allTribunals = tribunalSelector.loadAllTribunals(searchFrame);
 
+            tribunalSelector.closeDropdown(searchFrame);
+            page.waitForTimeout(500);
+
             // Filter to only Santiago tribunals (1-30)
             List<String> santigoTribunals = filterSantiagoTribunals(allTribunals);
 
