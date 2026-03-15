@@ -26,13 +26,17 @@ public class ResultPersistenceService {
     private static final String CSV_HEADER = "Persona,Tribunal,Año,Caratula,Rol\n";
 
     private final CausaRepository causaRepository;
+    private final CauseDeduplicationService causeDeduplicationService;
 
-    public ResultPersistenceService(CausaRepository causaRepository) {
+    public ResultPersistenceService(CausaRepository causaRepository,
+                                    CauseDeduplicationService causeDeduplicationService) {
         this.causaRepository = causaRepository;
+        this.causeDeduplicationService = causeDeduplicationService;
     }
 
     /**
      * Save a single result to CSV file and database
+     * Validates that result doesn't already exist before saving
      * Called immediately after a result is found during scraping
      * 
      * @param result The result to save
@@ -40,15 +44,22 @@ public class ResultPersistenceService {
      */
     public void saveResult(ResultDTO result, PersonaDTO person) {
         try {
-            logger.debug("💾 Saving result for person: {}", person.getNombres());
+            logger.debug("💾 Processing result for person: {}", person.getNombres());
+
+            // Check if causa already exists (deduplication)
+            if (causeDeduplicationService.causaExists(result)) {
+                logger.debug("⏭️  Result already exists, skipping: {} - {}", 
+                    result.getResolution(), result.getTribunal());
+                return;
+            }
 
             // Save to CSV file
             saveToCSV(result);
 
-            // Save to database
-            saveToDatabase(result, person);
+            // Save to database (validated as non-duplicate)
+            causeDeduplicationService.saveIfNotDuplicate(result, person);
 
-            logger.debug("✅ Result saved successfully");
+            logger.debug("✅ Result processed successfully");
 
         } catch (Exception e) {
             logger.error("❌ Error saving result: {}", e.getMessage(), e);
@@ -140,44 +151,6 @@ public class ResultPersistenceService {
         return field;
     }
 
-    /**
-     * Save result to database
-     * Creates a new Causa record
-     * 
-     * @param result The result to save
-     * @param person The person associated with this result
-     */
-    private void saveToDatabase(ResultDTO result, PersonaDTO person) {
-        try {
-            Causa causa = new Causa();
-            causa.setPersonaId(getOrCreatePersonId(person));
-            causa.setRol(result.getResolution());
-            causa.setAnio(result.getYear());
-            causa.setCaratula(result.getDetails());
-            causa.setTribunal(result.getTribunal());
-
-            causaRepository.save(causa);
-            logger.debug("💾 Cause saved to database: {} in {}", result.getResolution(), result.getTribunal());
-
-        } catch (Exception e) {
-            logger.error("❌ Error saving to database: {}", e.getMessage());
-            throw new RuntimeException("Failed to save result to database", e);
-        }
-    }
-
-    /**
-     * Get or create a PersonId for the result
-     * This is a simplified version - in production, you'd link to actual Persona records
-     * 
-     * @param person The person DTO
-     * @return A UUID for the person
-     */
-    private UUID getOrCreatePersonId(PersonaDTO person) {
-        // For now, generate a deterministic UUID based on person data
-        // In production, this should query PersonaRepository
-        String personKey = person.getNombres() + person.getApellidoPaterno() + person.getApellidoMaterno();
-        return UUID.nameUUIDFromBytes(personKey.getBytes());
-    }
 
     /**
      * Clear the CSV results file (useful for fresh start)
