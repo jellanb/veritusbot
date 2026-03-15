@@ -5,8 +5,10 @@ import com.example.veritusbot.model.PersonaProcesada;
 import com.example.veritusbot.repository.PersonaProcesadaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +16,7 @@ import java.util.Optional;
 /**
  * Service responsible for managing person processing states
  * Handles filtering and marking people as processed
+ * Implements configurable reprocessing logic (6 months for Phase 1, 12 for Phase 2)
  */
 @Service
 public class PersonProcessingService {
@@ -21,8 +24,23 @@ public class PersonProcessingService {
 
     private final PersonaProcesadaRepository personaProcesadaRepository;
 
+    @Value("${app.reprocess.phase1.months:6}")
+    private int phase1ReprocessMonths;
+
+    @Value("${app.reprocess.phase2.months:12}")
+    private int phase2ReprocessMonths;
+
     public PersonProcessingService(PersonaProcesadaRepository personaProcesadaRepository) {
         this.personaProcesadaRepository = personaProcesadaRepository;
+    }
+
+    /**
+     * Initialize - Log reprocessing configuration
+     */
+    public void init() {
+        logger.info("📋 Reprocessing Configuration loaded:");
+        logger.info("   Phase 1: {} months", phase1ReprocessMonths);
+        logger.info("   Phase 2: {} months", phase2ReprocessMonths);
     }
 
     /**
@@ -104,7 +122,11 @@ public class PersonProcessingService {
 
     /**
      * Check if a person should be processed in Phase 1
-     * 
+     * Process if:
+     * 1. Not in database (new person)
+     * 2. tribunal_principal_procesado = false/null (never processed)
+     * 3. fecha_procesada > phase1ReprocessMonths ago (needs reprocessing)
+     *
      * @param person Person to check
      * @return true if person should be processed in Phase 1
      */
@@ -117,12 +139,34 @@ public class PersonProcessingService {
         }
         
         PersonaProcesada persona = existing.get();
-        // Process if tribunal principal not processed
-        return persona.getTribunalPrincipalProcesado() == null || !persona.getTribunalPrincipalProcesado();
+
+        // Check if needs reprocessing (configured months passed)
+        if (persona.getFechaProcesada() != null) {
+            long monthsSinceProcesing = ChronoUnit.MONTHS.between(persona.getFechaProcesada(), LocalDateTime.now());
+            if (monthsSinceProcesing >= phase1ReprocessMonths) {
+                logger.debug("🔄 Reprocessing needed for {}: {} months since last processing (Phase 1 threshold: {})",
+                        person.getNombres(), monthsSinceProcesing, phase1ReprocessMonths);
+                persona.setUltimaRevalidacion(LocalDateTime.now());
+                persona.setVecesRevalidado((persona.getVecesRevalidado() != null ? persona.getVecesRevalidado() : 0) + 1);
+                personaProcesadaRepository.save(persona);
+                return true;
+            }
+        }
+        
+        // Check tribunal principal flag
+        if (persona.getTribunalPrincipalProcesado() == null || !persona.getTribunalPrincipalProcesado()) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
      * Check if a person should be processed in Phase 2
+     * Process if:
+     * 1. Not in database (new person)
+     * 2. procesado = false/null (never fully processed)
+     * 3. fecha_procesada > phase2ReprocessMonths ago (needs reprocessing)
      * 
      * @param person Person to check
      * @return true if person should be processed in Phase 2
@@ -136,8 +180,26 @@ public class PersonProcessingService {
         }
         
         PersonaProcesada persona = existing.get();
-        // Process if not fully processed
-        return persona.getProcesado() == null || !persona.getProcesado();
+
+        // Check if needs reprocessing (configured months passed)
+        if (persona.getFechaProcesada() != null) {
+            long monthsSinceProcesing = ChronoUnit.MONTHS.between(persona.getFechaProcesada(), LocalDateTime.now());
+            if (monthsSinceProcesing >= phase2ReprocessMonths) {
+                logger.debug("🔄 Reprocessing needed for {}: {} months since last processing (Phase 2 threshold: {})",
+                        person.getNombres(), monthsSinceProcesing, phase2ReprocessMonths);
+                persona.setUltimaRevalidacion(LocalDateTime.now());
+                persona.setVecesRevalidado((persona.getVecesRevalidado() != null ? persona.getVecesRevalidado() : 0) + 1);
+                personaProcesadaRepository.save(persona);
+                return true;
+            }
+        }
+        
+        // Check procesado flag
+        if (persona.getProcesado() == null || !persona.getProcesado()) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

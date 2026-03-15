@@ -2,6 +2,7 @@ package com.example.veritusbot.service.scraper.parser;
 
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
+import com.example.veritusbot.service.ResultPersistenceService;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -15,8 +16,16 @@ import java.util.*;
 public class ResultParser {
     private static final Logger logger = LoggerFactory.getLogger(ResultParser.class);
 
+    private final ResultPersistenceService resultPersistenceService;
+
+    public ResultParser(ResultPersistenceService resultPersistenceService) {
+        this.resultPersistenceService = resultPersistenceService;
+    }
+
     /**
      * Parse search results from HTML content
+     * Saves results immediately to CSV and database as they are found
+     * 
      * @param htmlContent HTML content to parse
      * @param person person searched
      * @param year Year of search
@@ -64,9 +73,15 @@ public class ResultParser {
 
                     results.add(result);
                     logger.debug("✅ Result added: {}", resolution);
+
+                    // 💾 SAVE IMMEDIATELY to CSV and Database
+                    resultPersistenceService.saveResult(result, person);
                 }
             }
 
+            if (!results.isEmpty()) {
+                logger.info("✅ Found and saved {} results for {}", results.size(), person.getNombres());
+            }
             logger.debug("✓ Parsing completed. Found {} results", results.size());
 
         } catch (Exception e) {

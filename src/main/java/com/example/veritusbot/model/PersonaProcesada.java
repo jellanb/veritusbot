@@ -38,6 +38,12 @@ public class PersonaProcesada {
     @Column(name = "tribunal_principal_procesado")
     private Boolean tribunalPrincipalProcesado;
 
+    @Column(name = "ultima_revalidacion")
+    private LocalDateTime ultimaRevalidacion;
+
+    @Column(name = "veces_revalidado")
+    private Integer vecesRevalidado;
+
     // ...existing code...
     public PersonaProcesada() {
     }
@@ -131,6 +137,22 @@ public class PersonaProcesada {
 
     public void setTribunalPrincipalProcesado(Boolean tribunalPrincipalProcesado) {
         this.tribunalPrincipalProcesado = tribunalPrincipalProcesado;
+    }
+
+    public LocalDateTime getUltimaRevalidacion() {
+        return ultimaRevalidacion;
+    }
+
+    public void setUltimaRevalidacion(LocalDateTime ultimaRevalidacion) {
+        this.ultimaRevalidacion = ultimaRevalidacion;
+    }
+
+    public Integer getVecesRevalidado() {
+        return vecesRevalidado;
+    }
+
+    public void setVecesRevalidado(Integer vecesRevalidado) {
+        this.vecesRevalidado = vecesRevalidado;
     }
 
     @Override
