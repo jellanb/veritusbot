@@ -10,6 +10,7 @@ import com.example.veritusbot.service.scraper.phases.Phase2Scraper;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.*;
 
@@ -21,6 +22,9 @@ public class ScraperOrchestrator {
     private final Phase1Scraper phase1Scraper;
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
+
+    @Value("${app.pjud.url}")
+    private String pjudUrl;
 
     public ScraperOrchestrator(BrowserManager browserManager,
                                Phase1Scraper phase1Scraper,
@@ -44,9 +48,9 @@ public class ScraperOrchestrator {
         try {
             logger.info("🚀 Starting scraper orchestrator...");
             page = browserManager.launchBrowser();
-            browserManager.navigateTo(page, "https://oficinajudicialvirtual.pjud.cl/home/index.php");
+            browserManager.navigateTo(page, pjudUrl);
 
-            // Filter and execute Phase 1 (tribunal principal)
+            // ...existing code...
             List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(people);
             
             if (!phase1People.isEmpty()) {
