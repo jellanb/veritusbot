@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper.form;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -22,29 +23,50 @@ public class TribunalSelector {
             logger.debug("📂 Opening tribunal dropdown...");
 
             Locator selectButton = frame.locator("button[data-toggle='dropdown'][aria-haspopup='listbox']").first();
+
             if (selectButton.count() == 0) {
-                selectButton = frame.locator("button.dropdown-toggle");
+                selectButton = frame.locator("button.dropdown-toggle").first();
             }
+
             if (selectButton.count() == 0) {
-                selectButton = frame.locator("button:has-text('Seleccione')");
+                selectButton = frame.locator("button:has-text('Seleccione')").first();
             }
 
             if (selectButton.count() == 0) {
                 throw new PlaywrightException("No se encontró botón del dropdown");
             }
 
-            // Esperar y hacer click
-            selectButton.first().waitFor(new Locator.WaitForOptions().setTimeout(3000));
-            selectButton.first().click(new Locator.ClickOptions().setTimeout(3000));
-
-            frame.waitForSelector("ul.dropdown-menu.inner", new Frame.WaitForSelectorOptions()
+            // esperar que el botón sea visible
+            selectButton.waitFor(new Locator.WaitForOptions()
+                    .setState(WaitForSelectorState.VISIBLE)
                     .setTimeout(8000));
 
-            // Espera adicional: asegurar que elementos están clickeables
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            Locator dropdownMenu = frame.locator("ul.dropdown-menu.inner");
+
+            int maxRetries = 3;
+            boolean opened = false;
+
+            for (int i = 0; i < maxRetries; i++) {
+
+                logger.debug("🔁 Attempt {} to open dropdown", i + 1);
+
+                selectButton.click(new Locator.ClickOptions().setTimeout(5000));
+
+                try {
+                    dropdownMenu.waitFor(new Locator.WaitForOptions()
+                            .setState(WaitForSelectorState.VISIBLE)
+                            .setTimeout(3000));
+
+                    opened = true;
+                    break;
+
+                } catch (Exception ignored) {
+                    logger.debug("Dropdown did not open, retrying...");
+                }
+            }
+
+            if (!opened) {
+                throw new RuntimeException("Dropdown did not open after retries");
             }
 
             logger.debug("✓ Dropdown opened successfully");

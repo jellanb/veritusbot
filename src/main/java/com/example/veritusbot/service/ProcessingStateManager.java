@@ -124,6 +124,24 @@ public class ProcessingStateManager {
     }
 
     /**
+     * Reset processing state (useful for startup or error recovery)
+     */
+    public void resetState() {
+        lock.lock();
+        try {
+            isProcessing = false;
+            currentProcessingPerson = null;
+            lastProcessingStart = null;
+            lastProcessingEnd = null;
+            totalRequests = 0;
+            completedRequests = 0;
+            logger.info("🔄 Processing state reset");
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Reset statistics (for testing)
      */
     public void resetStatistics() {
@@ -174,4 +192,3 @@ public class ProcessingStateManager {
         public long getProcessingTimeMs() { return processingTimeMs; }
     }
 }
-

@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper;
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.PersonProcessingService;
+import com.example.veritusbot.service.ProcessingStateManager;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase;
 import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
@@ -13,15 +14,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.*;
+import java.util.concurrent.*;
 
 @Service
 public class ScraperOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(ScraperOrchestrator.class);
 
+    @Value("${app.scraper.max-threads:3}")
+    private int maxThreads;
+
     private final BrowserManager browserManager;
     private final Phase1Scraper phase1Scraper;
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
+    private final ProcessingStateManager processingStateManager;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
@@ -29,104 +35,175 @@ public class ScraperOrchestrator {
     public ScraperOrchestrator(BrowserManager browserManager,
                                Phase1Scraper phase1Scraper,
                                Phase2Scraper phase2Scraper,
-                               PersonProcessingService personProcessingService) {
+                               PersonProcessingService personProcessingService,
+                               ProcessingStateManager processingStateManager) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
+        this.processingStateManager = processingStateManager;
+        
+        // Reset state on initialization to prevent leftover state from previous runs
+        processingStateManager.resetState();
     }
 
     /**
      * Scrape data for a list of people
+     * Process one person at a time with threading for their year range
      * @param people List of PersonaDTO objects to scrape
      * @return List of ResultDTO with all found results
      */
     public List<ResultDTO> scrapePeople(List<PersonaDTO> people) {
         List<ResultDTO> allResults = new ArrayList<>();
-        Page page;
 
         try {
-            logger.info("🚀 Starting scraper orchestrator...");
-            page = browserManager.launchBrowser();
-            browserManager.navigateTo(page, pjudUrl);
+            logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", maxThreads);
 
-            // ...existing code...
+            // Phase 1: Santiago tribunals
             List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(people);
             
             if (!phase1People.isEmpty()) {
                 logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
-                List<ResultDTO> phase1Results = executePhaseForAllPeople(page, phase1People, phase1Scraper);
-                allResults.addAll(phase1Results);
+                for (PersonaDTO person : phase1People) {
+                    List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
+                    allResults.addAll(personResults);
+                }
                 personProcessingService.markPhase1Complete(phase1People);
+                logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
             } else {
-                logger.info("ℹ️  Phase 1: No people pending tribunal principal processing");
+                logger.info("ℹ️  Phase 1: No people pending");
             }
 
-            // Filter and execute Phase 2 (general processing)
+            // Phase 2: Other tribunals
             List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(people);
             
             if (!phase2People.isEmpty()) {
                 logger.info("▶️  PHASE 2: Processing other tribunals...");
-                List<ResultDTO> phase2Results = executePhaseForAllPeople(page, phase2People, phase2Scraper);
-                allResults.addAll(phase2Results);
+                for (PersonaDTO person : phase2People) {
+                    List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
+                    allResults.addAll(personResults);
+                }
                 personProcessingService.markPhase2Complete(phase2People);
+                logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
             } else {
-                logger.info("ℹ️  Phase 2: No people pending general processing");
+                logger.info("ℹ️  Phase 2: No people pending");
             }
-
-            logger.info("✅ Scraping completed. Total results: {}", allResults.size());
 
         } catch (Exception e) {
             logger.error("❌ Fatal error in scraper: ", e);
-        } finally {
-            browserManager.closeBrowser();
         }
 
         return allResults;
     }
 
     /**
-     * Execute a specific phase for all people in the list
-     * @param page Playwright page instance
-     * @param people List of people to process
-     * @param phase Phase implementation to execute
-     * @return List of results from this phase
+     * Process a single person with threading for their year range
+     * Maximum 3 threads (browsers) for the year range
+     * @param person Person to process
+     * @param phase Phase to execute
+     * @param phaseName Phase name for logging
+     * @return List of results for this person
      */
-    private List<ResultDTO> executePhaseForAllPeople(Page page, List<PersonaDTO> people, Phase phase) {
-        List<ResultDTO> phaseResults = new ArrayList<>();
+    private List<ResultDTO> processPersonWithThreadPool(PersonaDTO person, Phase phase, String phaseName) {
+        List<ResultDTO> personResults = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
+        List<Future<Void>> futures = new ArrayList<>();
 
-        logger.info("📋 Executing phase: {}", phase.getPhaseName());
-
-        int counter = 1;
-        for (PersonaDTO person : people) {
-            logger.info("🔍 [{}/{}] Processing: {} {} {}",
-                counter,
-                people.size(),
+        try {
+            logger.info("🔍 Processing: {} {} {} (Years: {}-{}) [{}]",
                 person.getNombres(),
                 person.getApellidoPaterno(),
-                person.getApellidoMaterno());
+                person.getApellidoMaterno(),
+                person.getAnioInit(),
+                person.getAnioFin(),
+                phaseName);
 
-            try {
-                // Execute phase for this person
-                List<ResultDTO> personResults = phase.execute(page, person,
-                                                              person.getAnioInit(),
-                                                              person.getAnioFin());
-                phaseResults.addAll(personResults);
+            int totalYears = person.getAnioFin() - person.getAnioInit() + 1;
+            logger.info("   📅 Total years: {}, Max threads: {}", totalYears, maxThreads);
 
-                logger.info("✅ Person processed: {} results found", personResults.size());
-
-            } catch (Exception e) {
-                logger.error("❌ Error processing person: {} {} - {}",
-                    person.getNombres(),
-                    person.getApellidoPaterno(),
-                    e.getMessage());
+            // Submit a task for each year
+            for (int year = person.getAnioInit(); year <= person.getAnioFin(); year++) {
+                final int currentYear = year;
+                
+                Future<Void> future = executor.submit(() -> {
+                    String threadName = String.format("Thread-%s-%d", person.getNombres(), currentYear);
+                    Thread.currentThread().setName(threadName);
+                    
+                    try {
+                        logger.info("   🔄 [{}] Starting year {}", Thread.currentThread().getName(), currentYear);
+                        
+                        // Launch browser for this year
+                        Page page = browserManager.launchBrowser();
+                        
+                        try {
+                            browserManager.navigateTo(page, pjudUrl);
+                            
+                            // Execute phase for this year
+                            List<ResultDTO> yearResults = phase.execute(page, person, currentYear, currentYear);
+                            personResults.addAll(yearResults);
+                            
+                            logger.info("   ✅ [{}] Year {} completed. Found {} results",
+                                Thread.currentThread().getName(),
+                                currentYear,
+                                yearResults.size());
+                        } finally {
+                            // Always close the browser
+                            browserManager.closeBrowser(page);
+                        }
+                        
+                    } catch (Exception e) {
+                        logger.error("   ❌ [{}] Error processing year {}: {}",
+                            Thread.currentThread().getName(),
+                            currentYear,
+                            e.getMessage(), e);
+                    }
+                    
+                    return null;
+                });
+                
+                futures.add(future);
             }
 
-            counter++;
+            // Wait for all year tasks to complete
+            logger.info("   ⏳ Waiting for {} year(s) to complete...", futures.size());
+            
+            for (Future<Void> future : futures) {
+                try {
+                    future.get(20, TimeUnit.MINUTES);
+                } catch (TimeoutException e) {
+                    logger.warn("   ⚠️  Year processing timeout - possible site issue");
+                    future.cancel(true);  // Cancel the task
+                } catch (ExecutionException e) {
+                    logger.error("   ❌ Year processing failed: {}", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                } catch (InterruptedException e) {
+                    logger.warn("   ⚠️  Year processing interrupted");
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            logger.info("   ✓ Person {} completed with {} results",
+                person.getNombres(),
+                personResults.size());
+
+        } finally {
+            // Shutdown executor PROPERLY
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
+                    logger.warn("   ⚠️  Executor did not terminate, forcing shutdown");
+                    List<Runnable> remaining = executor.shutdownNow();
+                    if (!remaining.isEmpty()) {
+                        logger.warn("   ⚠️  {} tasks were cancelled", remaining.size());
+                    }
+                }
+            } catch (InterruptedException e) {
+                logger.warn("   ⚠️  Interrupted while waiting for executor termination");
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
 
-        logger.info("✓ {} completed. Found {} results", phase.getPhaseName(), phaseResults.size());
-        return phaseResults;
+        return new ArrayList<>(personResults);
     }
 }
 
