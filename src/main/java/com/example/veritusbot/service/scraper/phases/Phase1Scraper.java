@@ -89,35 +89,107 @@ public class Phase1Scraper implements Phase {
                         continue;
                     }
 
-                    logger.debug("🔍 Searching in: {} (index: {})", tribunalName, tribunalIndex);
-
-                    // Open dropdown
-                    tribunalSelector.openDropdown(searchFrame);
-                    page.waitForTimeout(500);
-
-                    // Select tribunal
-                    tribunalSelector.selectTribunal(searchFrame, tribunalName, tribunalIndex);
-                    page.waitForTimeout(2000);
-
-                    // Submit search
-                    formFiller.submitForm(searchFrame);
-                    page.waitForTimeout(15000);
-
-                    // Parse results
-                    String html = page.content();
-                    List<ResultDTO> tribunalResults = resultParser.parseResults(html, person, startYear, tribunalName);
-                    results.addAll(tribunalResults);
-
-                    if (!tribunalResults.isEmpty()) {
-                        logger.debug("✅ Found {} results in {}", tribunalResults.size(), tribunalName);
+                    // ✅ RETRY LOGIC: Max 5 retries per tribunal if browser closes
+                    int maxRetries = 5;
+                    int retryCount = 0;
+                    boolean tribunalSuccess = false;
+                    
+                    while (retryCount < maxRetries && !tribunalSuccess) {
+                        retryCount++;
                         
-                        // ✅ PERSIST IMMEDIATELY WHEN FOUND (not at the end)
-                        logger.debug("💾 Persisting {} results found in tribunal: {}", tribunalResults.size(), tribunalName);
-                        resultPersistenceService.saveResults(tribunalResults, person);
+                        try {
+                            logger.debug("🔍 Searching in: {} (index: {}) - Attempt {}/{}", 
+                                tribunalName, tribunalIndex, retryCount, maxRetries);
+
+                            // Open dropdown
+                            tribunalSelector.openDropdown(searchFrame);
+                            page.waitForTimeout(500);
+
+                            // Select tribunal
+                            tribunalSelector.selectTribunal(searchFrame, tribunalName, tribunalIndex);
+                            page.waitForTimeout(2000);
+
+                            // Submit search
+                            formFiller.submitForm(searchFrame);
+                            page.waitForTimeout(15000);
+
+                            // Parse results
+                            String html = page.content();
+                            List<ResultDTO> tribunalResults = resultParser.parseResults(html, person, startYear, tribunalName);
+                            results.addAll(tribunalResults);
+
+                            if (!tribunalResults.isEmpty()) {
+                                logger.debug("✅ Found {} results in {}", tribunalResults.size(), tribunalName);
+                                
+                                // ✅ PERSIST IMMEDIATELY WHEN FOUND (not at the end)
+                                logger.debug("💾 Persisting {} results found in tribunal: {}", tribunalResults.size(), tribunalName);
+                                resultPersistenceService.saveResults(tribunalResults, person);
+                            }
+                            
+                            tribunalSuccess = true;  // ✅ Mark tribunal as successful
+
+                        } catch (Exception e) {
+                            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                            
+                            // Check if it's a browser closure error
+                            boolean isBrowserClosed = e.getMessage() != null && 
+                                (e.getMessage().contains("Target page, context or browser has been closed") ||
+                                 e.getMessage().contains("Target closed") ||
+                                 e.getMessage().contains("Browser closed") ||
+                                 e.getMessage().contains("Connection closed") ||
+                                 e.getMessage().contains("Protocol error") ||
+                                 e.getMessage().contains("WebSocket is closed") ||
+                                 e.getMessage().contains("ERR_FAILED") ||
+                                 e.getMessage().contains("net::ERR") ||
+                                 e.getClass().getSimpleName().contains("PlaywrightException")) ||
+                                e instanceof java.io.IOException;
+                            
+                            if (isBrowserClosed) {
+                                // Browser was closed
+                                if (retryCount < maxRetries) {
+                                    logger.warn("   ⚠️  Browser closed while searching tribunal: {}. Retrying... (Attempt {}/{})",
+                                        tribunalName, retryCount, maxRetries);
+                                    
+                                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                                    long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
+                                    try {
+                                        logger.debug("   ⏳ Waiting {}ms before retry...", backoffMs);
+                                        Thread.sleep(backoffMs);
+                                    } catch (InterruptedException ie) {
+                                        Thread.currentThread().interrupt();
+                                        logger.warn("   ⚠️  Retry wait interrupted");
+                                        break;
+                                    }
+                                } else {
+                                    logger.error("   ❌ Tribunal {} FAILED after {} attempts (browser closed). Skipping to next tribunal.",
+                                        tribunalName, maxRetries);
+                                }
+                            } else {
+                                // Other error
+                                if (retryCount < maxRetries) {
+                                    logger.error("   ❌ Error searching tribunal {}: {} (Attempt {}/{}). Retrying...",
+                                        tribunalName, errorMsg, retryCount, maxRetries);
+                                    
+                                    // Exponential backoff
+                                    long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
+                                    try {
+                                        logger.debug("   ⏳ Waiting {}ms before retry...", backoffMs);
+                                        Thread.sleep(backoffMs);
+                                    } catch (InterruptedException ie) {
+                                        Thread.currentThread().interrupt();
+                                        logger.warn("   ⚠️  Retry wait interrupted");
+                                        break;
+                                    }
+                                } else {
+                                    logger.error("   ❌ Tribunal {} FAILED after {} attempts: {}. Skipping to next tribunal.",
+                                        tribunalName, maxRetries, errorMsg);
+                                }
+                            }
+                        }
                     }
 
                 } catch (Exception e) {
-                    logger.warn("⚠ Error searching tribunal {}: {}", tribunalName, e.getMessage());
+                    logger.warn("⚠ Unexpected error processing tribunal {}: {}", tribunalName, e.getMessage());
                 }
             }
 
@@ -148,6 +220,8 @@ public class Phase1Scraper implements Phase {
         return "Phase 1: Santiago Tribunals (1-30)";
     }
 }
+
+
 
 
 
