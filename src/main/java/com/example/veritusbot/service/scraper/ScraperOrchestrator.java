@@ -70,10 +70,21 @@ public class ScraperOrchestrator {
             if (!phase1People.isEmpty()) {
                 logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
                 for (PersonaDTO person : phase1People) {
-                    // ✅ Phase1Scraper now persists results immediately when found
-                    // No need to persist again here
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
                     allResults.addAll(personResults);
+                    
+                    // ✅ MARK PERSON AS PROCESSED IMMEDIATELY (within the person loop)
+                    try {
+                        logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
+                            person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                        
+                        personaProcesadaPersistenceService.markTribunalPrincipalAsProcessed(
+                            personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
+                        
+                        logger.info("✅ Person marked as processed in tracking table (tribunal_principal_procesado=true)");
+                    } catch (Exception e) {
+                        logger.error("❌ Error marking person as processed: {}", e.getMessage());
+                    }
                 }
                 personProcessingService.markPhase1Complete(phase1People);
                 logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
@@ -87,10 +98,21 @@ public class ScraperOrchestrator {
             if (!phase2People.isEmpty()) {
                 logger.info("▶️  PHASE 2: Processing other tribunals...");
                 for (PersonaDTO person : phase2People) {
-                    // ✅ Phase2Scraper now persists results immediately when found
-                    // No need to persist again here
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
                     allResults.addAll(personResults);
+                    
+                    // ✅ MARK PERSON AS PROCESSED IMMEDIATELY (within the person loop)
+                    try {
+                        logger.info("📝 Marking person as completely processed after Phase 2: {} {} {}",
+                            person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                        
+                        personaProcesadaPersistenceService.markAsProcessed(
+                            personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
+                        
+                        logger.info("✅ Person marked as completely processed in tracking table (procesado=true)");
+                    } catch (Exception e) {
+                        logger.error("❌ Error marking person as processed: {}", e.getMessage());
+                    }
                 }
                 personProcessingService.markPhase2Complete(phase2People);
                 logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
@@ -195,20 +217,6 @@ public class ScraperOrchestrator {
                 person.getNombres(),
                 personResults.size());
 
-            // ✅ MARK PERSON AS PROCESSED IN personas_procesadas
-            // When all years for this person have been processed
-            try {
-                logger.debug("📝 Marking person as processed: {} {} {}",
-                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                
-                // Get or create PersonaProcesada and mark as processed for this phase
-                personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
-                
-                // Note: Specific tribunal marking (Phase 1 vs Phase 2) can be done by caller if needed
-                logger.debug("✅ Person marked as processed in tracking table");
-            } catch (Exception e) {
-                logger.error("❌ Error marking person as processed: {}", e.getMessage());
-            }
 
         } finally {
             // Shutdown executor PROPERLY
