@@ -28,7 +28,6 @@ public class ScraperOrchestrator {
     private final Phase1Scraper phase1Scraper;
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
-    private final ProcessingStateManager processingStateManager;
     private final ResultPersistenceService resultPersistenceService;
 
     @Value("${app.pjud.url}")
@@ -44,7 +43,6 @@ public class ScraperOrchestrator {
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
-        this.processingStateManager = processingStateManager;
         this.resultPersistenceService = resultPersistenceService;
 
         // Reset state on initialization to prevent leftover state from previous runs
