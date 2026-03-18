@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper;
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.PersonProcessingService;
+import com.example.veritusbot.service.PersonaProcesadaPersistenceService;
 import com.example.veritusbot.service.ProcessingStateManager;
 import com.example.veritusbot.service.ResultPersistenceService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
@@ -28,7 +29,7 @@ public class ScraperOrchestrator {
     private final Phase1Scraper phase1Scraper;
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
-    private final ResultPersistenceService resultPersistenceService;
+    private final PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
@@ -38,12 +39,13 @@ public class ScraperOrchestrator {
                                Phase2Scraper phase2Scraper,
                                PersonProcessingService personProcessingService,
                                ProcessingStateManager processingStateManager,
-                               ResultPersistenceService resultPersistenceService) {
+                               ResultPersistenceService resultPersistenceService,
+                               PersonaProcesadaPersistenceService personaProcesadaPersistenceService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
-        this.resultPersistenceService = resultPersistenceService;
+        this.personaProcesadaPersistenceService = personaProcesadaPersistenceService;
 
         // Reset state on initialization to prevent leftover state from previous runs
         processingStateManager.resetState();
@@ -171,6 +173,7 @@ public class ScraperOrchestrator {
                 futures.add(future);
             }
 
+
             // Wait for all year tasks to complete
             logger.info("   ⏳ Waiting for {} year(s) to complete...", futures.size());
             
@@ -191,6 +194,21 @@ public class ScraperOrchestrator {
             logger.info("   ✓ Person {} completed with {} results",
                 person.getNombres(),
                 personResults.size());
+
+            // ✅ MARK PERSON AS PROCESSED IN personas_procesadas
+            // When all years for this person have been processed
+            try {
+                logger.debug("📝 Marking person as processed: {} {} {}",
+                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                
+                // Get or create PersonaProcesada and mark as processed for this phase
+                personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
+                
+                // Note: Specific tribunal marking (Phase 1 vs Phase 2) can be done by caller if needed
+                logger.debug("✅ Person marked as processed in tracking table");
+            } catch (Exception e) {
+                logger.error("❌ Error marking person as processed: {}", e.getMessage());
+            }
 
         } finally {
             // Shutdown executor PROPERLY
