@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.*;
+import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
 
 @Service
 public class ScraperOrchestrator {
@@ -39,7 +40,6 @@ public class ScraperOrchestrator {
                                Phase2Scraper phase2Scraper,
                                PersonProcessingService personProcessingService,
                                ProcessingStateManager processingStateManager,
-                               ResultPersistenceService resultPersistenceService,
                                PersonaProcesadaPersistenceService personaProcesadaPersistenceService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
@@ -157,7 +157,7 @@ public class ScraperOrchestrator {
                     String threadName = String.format("Thread-%s-%d", person.getNombres(), currentYear);
                     Thread.currentThread().setName(threadName);
                     
-                    // ✅ RETRY LOGIC: Max 5 retries per year when browser closes
+                    // ✅ RETRY LOGIC: Open new browser on each retry
                     int maxRetries = 5;
                     int retryCount = 0;
                     boolean success = false;
@@ -173,12 +173,12 @@ public class ScraperOrchestrator {
                                 retryCount,
                                 maxRetries);
                             
-                            // Launch browser for this year
+                            // ✅ Create FRESH browser for each attempt
                             page = browserManager.launchBrowser();
-                            
                             browserManager.navigateTo(page, pjudUrl);
                             
-                            // Execute phase for this year
+                            // ✅ Execute phase for this year
+                            // NOTE: Phase1Scraper/Phase2Scraper throw RetryableScraperException on errors
                             List<ResultDTO> yearResults = phase.execute(page, person, currentYear, currentYear);
                             personResults.addAll(yearResults);
                             
@@ -189,8 +189,50 @@ public class ScraperOrchestrator {
                             
                             success = true;  // ✅ Mark as successful
                             
+                        } catch (RetryableScraperException e) {
+                            // ✅ Special handling for retryable errors
+                            if (page != null) {
+                                try {
+                                    browserManager.closeBrowser(page);
+                                } catch (Exception closingException) {
+                                    logger.debug("   ℹ️  Browser already closed or error while closing");
+                                }
+                            }
+                            
+                            if (e.isRetryable() && retryCount < maxRetries) {
+                                // ✅ Browser/Network error - Retry with new browser
+                                logger.warn("   ⚠️  [{}] Retryable error ({}). Retrying with new browser... (Attempt {}/{})",
+                                    Thread.currentThread().getName(),
+                                    e.getContext(),
+                                    retryCount,
+                                    maxRetries);
+                                
+                                // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                                long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
+                                try {
+                                    logger.debug("   ⏳ [{}] Waiting {}ms before retry attempt {}...", 
+                                        Thread.currentThread().getName(), backoffMs, retryCount + 1);
+                                    Thread.sleep(backoffMs);
+                                } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    logger.warn("   ⚠️  [{}] Retry wait interrupted", Thread.currentThread().getName());
+                                    break;
+                                }
+                                // ↻ Loop continues, opens NEW browser
+                                
+                            } else {
+                                // ❌ Non-retryable error or max retries reached
+                                logger.error("   ❌ [{}] Year {} FAILED ({}): {} (Attempt {}/{}). Skipping to next year.",
+                                    Thread.currentThread().getName(),
+                                    currentYear,
+                                    e.isRetryable() ? "retries exceeded" : "non-retryable",
+                                    e.getMessage(),
+                                    retryCount,
+                                    maxRetries);
+                            }
+                            
                         } catch (Exception e) {
-                            // Close browser if still open
+                            // ❌ Unexpected error - Close browser and log
                             if (page != null) {
                                 try {
                                     browserManager.closeBrowser(page);
@@ -200,74 +242,12 @@ public class ScraperOrchestrator {
                             }
                             
                             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                            
-                            // Check if it's a browser closure error
-                            boolean isBrowserClosed = e.getMessage() != null && 
-                                (e.getMessage().contains("Target page, context or browser has been closed") ||
-                                 e.getMessage().contains("Target closed") ||
-                                 e.getMessage().contains("Browser closed") ||
-                                 e.getMessage().contains("Connection closed") ||
-                                 e.getMessage().contains("Protocol error") ||
-                                 e.getMessage().contains("WebSocket is closed") ||
-                                 e.getMessage().contains("ERR_FAILED") ||
-                                 e.getMessage().contains("net::ERR") ||
-                                 e.getClass().getSimpleName().contains("PlaywrightException"));
-                            
-                            if (isBrowserClosed || e instanceof java.io.IOException) {
-                                // Browser was closed (intentional or crash) or network issue
-                                if (retryCount < maxRetries) {
-                                    logger.warn("   ⚠️  [{}] Browser closed or connection lost while processing year {}. Retrying... (Attempt {}/{})",
-                                        Thread.currentThread().getName(),
-                                        currentYear,
-                                        retryCount,
-                                        maxRetries);
-                                    
-                                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                                    long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
-                                    try {
-                                        logger.debug("   ⏳ [{}] Waiting {}ms before retry attempt {}...", 
-                                            Thread.currentThread().getName(), backoffMs, retryCount + 1);
-                                        Thread.sleep(backoffMs);
-                                    } catch (InterruptedException ie) {
-                                        Thread.currentThread().interrupt();
-                                        logger.warn("   ⚠️  [{}] Retry wait interrupted", Thread.currentThread().getName());
-                                        break;
-                                    }
-                                } else {
-                                    logger.error("   ❌ [{}] Year {} FAILED after {} attempts (browser closed/network issue). Skipping to next year.",
-                                        Thread.currentThread().getName(),
-                                        currentYear,
-                                        maxRetries);
-                                }
-                            } else {
-                                // Other error (not browser closed)
-                                if (retryCount < maxRetries) {
-                                    logger.error("   ❌ [{}] Error processing year {}: {} (Attempt {}/{}). Retrying...",
-                                        Thread.currentThread().getName(),
-                                        currentYear,
-                                        errorMsg,
-                                        retryCount,
-                                        maxRetries);
-                                    
-                                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                                    long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
-                                    try {
-                                        logger.debug("   ⏳ [{}] Waiting {}ms before retry attempt {}...", 
-                                            Thread.currentThread().getName(), backoffMs, retryCount + 1);
-                                        Thread.sleep(backoffMs);
-                                    } catch (InterruptedException ie) {
-                                        Thread.currentThread().interrupt();
-                                        logger.warn("   ⚠️  [{}] Retry wait interrupted", Thread.currentThread().getName());
-                                        break;
-                                    }
-                                } else {
-                                    logger.error("   ❌ [{}] Year {} FAILED after {} attempts: {}. Skipping to next year.",
-                                        Thread.currentThread().getName(),
-                                        currentYear,
-                                        maxRetries,
-                                        errorMsg);
-                                }
-                            }
+                            logger.error("   ❌ [{}] Unexpected error in year {}: {} (Attempt {}/{}). Skipping to next year.",
+                                Thread.currentThread().getName(),
+                                currentYear,
+                                errorMsg,
+                                retryCount,
+                                maxRetries);
                         }
                     }
                     
@@ -293,7 +273,7 @@ public class ScraperOrchestrator {
                     future.get(20, TimeUnit.MINUTES);
                 } catch (TimeoutException e) {
                     logger.warn("   ⚠️  Year processing timeout - possible site issue");
-                    future.cancel(true);  // Cancel the task
+                    future.cancel(true);
                 } catch (ExecutionException e) {
                     logger.error("   ❌ Year processing failed: {}", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                 } catch (InterruptedException e) {
@@ -305,7 +285,6 @@ public class ScraperOrchestrator {
             logger.info("   ✓ Person {} completed with {} results",
                 person.getNombres(),
                 personResults.size());
-
 
         } finally {
             // Shutdown executor PROPERLY
