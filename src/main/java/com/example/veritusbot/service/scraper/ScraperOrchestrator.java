@@ -4,6 +4,7 @@ import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.PersonProcessingService;
 import com.example.veritusbot.service.ProcessingStateManager;
+import com.example.veritusbot.service.ResultPersistenceService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase;
 import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
@@ -28,6 +29,7 @@ public class ScraperOrchestrator {
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
     private final ProcessingStateManager processingStateManager;
+    private final ResultPersistenceService resultPersistenceService;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
@@ -36,13 +38,15 @@ public class ScraperOrchestrator {
                                Phase1Scraper phase1Scraper,
                                Phase2Scraper phase2Scraper,
                                PersonProcessingService personProcessingService,
-                               ProcessingStateManager processingStateManager) {
+                               ProcessingStateManager processingStateManager,
+                               ResultPersistenceService resultPersistenceService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
         this.processingStateManager = processingStateManager;
-        
+        this.resultPersistenceService = resultPersistenceService;
+
         // Reset state on initialization to prevent leftover state from previous runs
         processingStateManager.resetState();
     }
@@ -50,6 +54,7 @@ public class ScraperOrchestrator {
     /**
      * Scrape data for a list of people
      * Process one person at a time with threading for their year range
+     * Persist results immediately to CSV and database after each person
      * @param people List of PersonaDTO objects to scrape
      * @return List of ResultDTO with all found results
      */
@@ -67,6 +72,16 @@ public class ScraperOrchestrator {
                 for (PersonaDTO person : phase1People) {
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
                     allResults.addAll(personResults);
+                    
+                    // Persist results immediately after processing person
+                    if (!personResults.isEmpty()) {
+                        logger.info("💾 Persisting {} results for person: {} {} {}",
+                            personResults.size(),
+                            person.getNombres(),
+                            person.getApellidoPaterno(),
+                            person.getApellidoMaterno());
+                        resultPersistenceService.saveResults(personResults, person);
+                    }
                 }
                 personProcessingService.markPhase1Complete(phase1People);
                 logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
@@ -82,6 +97,16 @@ public class ScraperOrchestrator {
                 for (PersonaDTO person : phase2People) {
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
                     allResults.addAll(personResults);
+                    
+                    // Persist results immediately after processing person
+                    if (!personResults.isEmpty()) {
+                        logger.info("💾 Persisting {} results for person: {} {} {}",
+                            personResults.size(),
+                            person.getNombres(),
+                            person.getApellidoPaterno(),
+                            person.getApellidoMaterno());
+                        resultPersistenceService.saveResults(personResults, person);
+                    }
                 }
                 personProcessingService.markPhase2Complete(phase2People);
                 logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
