@@ -68,18 +68,10 @@ public class ScraperOrchestrator {
             if (!phase1People.isEmpty()) {
                 logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
                 for (PersonaDTO person : phase1People) {
+                    // ✅ Phase1Scraper now persists results immediately when found
+                    // No need to persist again here
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
                     allResults.addAll(personResults);
-                    
-                    // Persist results immediately after processing person
-                    if (!personResults.isEmpty()) {
-                        logger.info("💾 Persisting {} results for person: {} {} {}",
-                            personResults.size(),
-                            person.getNombres(),
-                            person.getApellidoPaterno(),
-                            person.getApellidoMaterno());
-                        resultPersistenceService.saveResults(personResults, person);
-                    }
                 }
                 personProcessingService.markPhase1Complete(phase1People);
                 logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
@@ -93,18 +85,10 @@ public class ScraperOrchestrator {
             if (!phase2People.isEmpty()) {
                 logger.info("▶️  PHASE 2: Processing other tribunals...");
                 for (PersonaDTO person : phase2People) {
+                    // ✅ Phase2Scraper now persists results immediately when found
+                    // No need to persist again here
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
                     allResults.addAll(personResults);
-                    
-                    // Persist results immediately after processing person
-                    if (!personResults.isEmpty()) {
-                        logger.info("💾 Persisting {} results for person: {} {} {}",
-                            personResults.size(),
-                            person.getNombres(),
-                            person.getApellidoPaterno(),
-                            person.getApellidoMaterno());
-                        resultPersistenceService.saveResults(personResults, person);
-                    }
                 }
                 personProcessingService.markPhase2Complete(phase2People);
                 logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());

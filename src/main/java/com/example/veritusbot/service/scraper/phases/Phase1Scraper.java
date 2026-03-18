@@ -2,6 +2,7 @@ package com.example.veritusbot.service.scraper.phases;
 
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
+import com.example.veritusbot.service.ResultPersistenceService;
 import com.example.veritusbot.service.scraper.browser.FrameNavigator;
 import com.example.veritusbot.service.scraper.form.FormFiller;
 import com.example.veritusbot.service.scraper.form.TribunalSelector;
@@ -15,6 +16,7 @@ import java.util.*;
 
 /**
  * Phase 1 Scraper: Search in Santiago tribunals (1º - 30º)
+ * Persists results immediately when found (not at the end)
  */
 @Component
 public class Phase1Scraper implements Phase {
@@ -24,13 +26,16 @@ public class Phase1Scraper implements Phase {
     private final TribunalSelector tribunalSelector;
     private final ResultParser resultParser;
     private final FrameNavigator frameNavigator;
+    private final ResultPersistenceService resultPersistenceService;
 
     public Phase1Scraper(FormFiller formFiller, TribunalSelector tribunalSelector,
-                         ResultParser resultParser, FrameNavigator frameNavigator) {
+                         ResultParser resultParser, FrameNavigator frameNavigator,
+                         ResultPersistenceService resultPersistenceService) {
         this.formFiller = formFiller;
         this.tribunalSelector = tribunalSelector;
         this.resultParser = resultParser;
         this.frameNavigator = frameNavigator;
+        this.resultPersistenceService = resultPersistenceService;
     }
 
     @Override
@@ -105,6 +110,10 @@ public class Phase1Scraper implements Phase {
 
                     if (!tribunalResults.isEmpty()) {
                         logger.debug("✅ Found {} results in {}", tribunalResults.size(), tribunalName);
+                        
+                        // ✅ PERSIST IMMEDIATELY WHEN FOUND (not at the end)
+                        logger.debug("💾 Persisting {} results found in tribunal: {}", tribunalResults.size(), tribunalName);
+                        resultPersistenceService.saveResults(tribunalResults, person);
                     }
 
                 } catch (Exception e) {
