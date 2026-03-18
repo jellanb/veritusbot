@@ -72,8 +72,7 @@ public class ScraperOrchestrator {
                 for (PersonaDTO person : phase1People) {
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
                     allResults.addAll(personResults);
-                    
-                    // ✅ MARK PERSON AS PROCESSED IMMEDIATELY (within the person loop)
+
                     try {
                         logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
                             person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
@@ -86,7 +85,6 @@ public class ScraperOrchestrator {
                         logger.error("❌ Error marking person as processed: {}", e.getMessage());
                     }
                 }
-                personProcessingService.markPhase1Complete(phase1People);
                 logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
             } else {
                 logger.info("ℹ️  Phase 1: No people pending");
@@ -114,7 +112,6 @@ public class ScraperOrchestrator {
                         logger.error("❌ Error marking person as processed: {}", e.getMessage());
                     }
                 }
-                personProcessingService.markPhase2Complete(phase2People);
                 logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
             } else {
                 logger.info("ℹ️  Phase 2: No people pending");
