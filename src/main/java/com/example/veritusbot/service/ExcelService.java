@@ -17,9 +17,12 @@ public class ExcelService {
     private static final Logger logger = LoggerFactory.getLogger(ExcelService.class);
 
     private final PersonPersistenceService personPersistenceService;
+    private final PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
 
-    public ExcelService(PersonPersistenceService personPersistenceService) {
+    public ExcelService(PersonPersistenceService personPersistenceService,
+                       PersonaProcesadaPersistenceService personaProcesadaPersistenceService) {
         this.personPersistenceService = personPersistenceService;
+        this.personaProcesadaPersistenceService = personaProcesadaPersistenceService;
     }
 
     /**
@@ -99,7 +102,10 @@ public class ExcelService {
                                     duplicatePersonasCount++;
                                 } else {
                                     personPersistenceService.saveOrGetExisting(person);
+                                    // ✅ NUEVO: Guardar en personas_procesadas con estado inicial
+                                    personaProcesadaPersistenceService.saveNewPersonaProcesada(person);
                                     System.out.println("✓ Person saved and loaded: " + person);
+                                    System.out.println("✓ PersonaProcesada created: (procesado=false, tribunal_principal_procesado=false)");
                                     newPersonasCount++;
                                 }
                             } else {
