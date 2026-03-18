@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import java.util.*;
+import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
 
 /**
  * Phase 1 Scraper: Search in Santiago tribunals (1º - 30º)
@@ -39,7 +40,8 @@ public class Phase1Scraper implements Phase {
     }
 
     @Override
-    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear) {
+    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear)
+            throws RetryableScraperException {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
@@ -117,7 +119,22 @@ public class Phase1Scraper implements Phase {
                     }
 
                 } catch (Exception e) {
-                    logger.warn("⚠ Error searching tribunal {}: {}", tribunalName, e.getMessage());
+                    // ✅ Throw exception with context for ScraperOrchestrator to handle retries
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    logger.error("❌ Error searching tribunal {}: {}", tribunalName, errorMsg);
+                    
+                    // If it's a browser/network error, let ScraperOrchestrator know to retry
+                    // Otherwise, log and continue to next tribunal
+                    if (RetryableScraperException.isBrowserOrNetworkError(e)) {
+                        throw new com.example.veritusbot.service.scraper.retry.RetryableScraperException(
+                            "Browser/Network error while searching tribunal: " + tribunalName,
+                            e,
+                            true,  // isRetryable
+                            "tribunal: " + tribunalName
+                        );
+                    } else {
+                        logger.warn("⚠ Non-retryable error in tribunal {}, continuing to next...", tribunalName);
+                    }
                 }
             }
 
@@ -125,6 +142,7 @@ public class Phase1Scraper implements Phase {
 
         } catch (Exception e) {
             logger.error("❌ Error in Phase 1: ", e);
+            throw e;  // ✅ Let ScraperOrchestrator handle the exception
         }
 
         return results;
@@ -143,11 +161,21 @@ public class Phase1Scraper implements Phase {
         return santiago;
     }
 
+
     @Override
     public String getPhaseName() {
         return "Phase 1: Santiago Tribunals (1-30)";
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 

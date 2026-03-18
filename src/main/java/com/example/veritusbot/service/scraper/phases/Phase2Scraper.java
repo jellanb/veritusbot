@@ -13,10 +13,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import java.util.*;
+import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
+
 
 /**
  * Phase 2 Scraper: Search in other tribunals (excluding Santiago)
  * Persists results immediately when found (not at the end)
+ * Throws RetryableScraperException for browser/network errors that ScraperOrchestrator should retry
  */
 @Component
 public class Phase2Scraper implements Phase {
@@ -39,7 +42,8 @@ public class Phase2Scraper implements Phase {
     }
 
     @Override
-    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear) {
+    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear)
+            throws RetryableScraperException {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
@@ -114,7 +118,22 @@ public class Phase2Scraper implements Phase {
                     }
 
                 } catch (Exception e) {
-                    logger.warn("⚠ Error searching tribunal {}: {}", tribunalName, e.getMessage());
+                    // ✅ Throw exception with context for ScraperOrchestrator to handle retries
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    logger.error("❌ Error searching tribunal {}: {}", tribunalName, errorMsg);
+                    
+                    // If it's a browser/network error, let ScraperOrchestrator know to retry
+                    // Otherwise, log and continue to next tribunal
+                    if (RetryableScraperException.isBrowserOrNetworkError(e)) {
+                        throw new com.example.veritusbot.service.scraper.retry.RetryableScraperException(
+                            "Browser/Network error while searching tribunal: " + tribunalName,
+                            e,
+                            true,  // isRetryable
+                            "tribunal: " + tribunalName
+                        );
+                    } else {
+                        logger.warn("⚠ Non-retryable error in tribunal {}, continuing to next...", tribunalName);
+                    }
                 }
             }
 
@@ -122,10 +141,12 @@ public class Phase2Scraper implements Phase {
 
         } catch (Exception e) {
             logger.error("❌ Error in Phase 2: ", e);
+            throw e;  // ✅ Let ScraperOrchestrator handle the exception
         }
 
         return results;
     }
+
 
     /**
      * Filter tribunals that do NOT contain "Santiago" in the name
@@ -145,6 +166,14 @@ public class Phase2Scraper implements Phase {
         return "Phase 2: Other Tribunals (excluding Santiago)";
     }
 }
+
+
+
+
+
+
+
+
 
 
 
