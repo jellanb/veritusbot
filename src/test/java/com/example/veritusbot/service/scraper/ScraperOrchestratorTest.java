@@ -136,6 +136,7 @@ class ScraperOrchestratorTest {
         verify(browserManager, times(2)).navigateTo(any(Page.class), eq("https://example.test/pjud"));
         verify(phase1Scraper, times(2)).execute(any(Page.class), eq(person), eq(2022), eq(2022));
         verify(browserManager, times(1)).closeBrowser(firstAttemptPage);
+        verify(browserManager, times(1)).closeBrowser(secondAttemptPage);
     }
 
     @Test
@@ -157,6 +158,7 @@ class ScraperOrchestratorTest {
         assertEquals(0, results.size());
         verify(browserManager, times(5)).launchBrowser();
         verify(phase1Scraper, times(5)).execute(eq(page), eq(person), eq(2023), eq(2023));
+        verify(browserManager, times(5)).closeBrowser(page);
     }
 }
 
