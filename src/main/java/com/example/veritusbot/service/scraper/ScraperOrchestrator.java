@@ -191,13 +191,6 @@ public class ScraperOrchestrator {
                             
                         } catch (RetryableScraperException e) {
                             // ✅ Special handling for retryable errors
-                            if (page != null) {
-                                try {
-                                    browserManager.closeBrowser(page);
-                                } catch (Exception closingException) {
-                                    logger.debug("   ℹ️  Browser already closed or error while closing");
-                                }
-                            }
                             
                             if (e.isRetryable() && retryCount < maxRetries) {
                                 // ✅ Browser/Network error - Retry with new browser
@@ -232,14 +225,7 @@ public class ScraperOrchestrator {
                             }
                             
                         } catch (Exception e) {
-                            // ❌ Unexpected error - Close browser and log
-                            if (page != null) {
-                                try {
-                                    browserManager.closeBrowser(page);
-                                } catch (Exception closingException) {
-                                    logger.debug("   ℹ️  Browser already closed or error while closing");
-                                }
-                            }
+                            // ❌ Unexpected error - Log and continue
                             
                             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                             logger.error("   ❌ [{}] Unexpected error in year {}: {} (Attempt {}/{}). Skipping to next year.",
@@ -248,6 +234,15 @@ public class ScraperOrchestrator {
                                 errorMsg,
                                 retryCount,
                                 maxRetries);
+                        } finally {
+                            // Always close the browser for this attempt (success or failure)
+                            if (page != null) {
+                                try {
+                                    browserManager.closeBrowser(page);
+                                } catch (Exception closingException) {
+                                    logger.debug("   ℹ️  Browser already closed or error while closing");
+                                }
+                            }
                         }
                     }
                     
