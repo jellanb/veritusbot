@@ -52,6 +52,20 @@ Veritus Bot es una aplicación Spring Boot que automatiza búsquedas de informac
 - Permite auditoría y rastreo de qué personas se han procesado
 - Implementación: `PersonaProcesada.java` y `PersonaProcesadaRepository.java`
 
+### 7. ✨ Sistema de Autenticación JWT (NEW) ✨
+- **Autenticación basada en JWT (JSON Web Tokens)**
+- Endpoint `/api/veritus-app/login` para autenticar usuarios
+- **Roles:** ADMIN, OPERADOR, VIEWER
+- Protección de endpoints sensibles con Spring Security
+- Validación de tokens en cada request
+- Manejo de CORS para frontend
+- BCrypt para hash de contraseñas
+- Expiración de tokens en 24 horas
+- Auditoría: registro de último login
+- Implementación: `service/auth/`, `controller/LoginController.java`, `config/SecurityConfig.java`
+
+**Documentación:** Ver [`AUTENTICACION.md`](./AUTENTICACION.md) y [`GUIA_RAPIDA_LOGIN.md`](./GUIA_RAPIDA_LOGIN.md)
+
 ## 🚀 Inicio Rápido
 
 ### Paso 1: Iniciar SQL Server
@@ -80,8 +94,16 @@ java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
 curl "http://localhost:8083/api/test"
 # Resultado: ✓ API funcionando correctamente
 
-# Búsqueda completa
-curl "http://localhost:8083/api/buscar-personas?archivo=personas.csv"
+# 🔐 NUEVO: Autenticarse
+curl -X POST http://localhost:8083/api/veritus-app/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@veritus.com","password":"admin123"}'
+# Resultado: JWT token + datos usuario
+
+# Búsqueda completa (requiere token)
+TOKEN="<jwt-token-aqui>"
+curl -X POST "http://localhost:8083/api/buscar-personas?archivo=personas.csv" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 📊 Configuración
@@ -447,7 +469,7 @@ SELECT COUNT(*) FROM causas;
 
 ---
 
-**Versión:** 2.1  
-**Última actualización:** 7 Marzo 2026  
+**Versión:** 2.2 (Con Autenticación JWT)  
+**Última actualización:** 26 Marzo 2026  
 **Estado:** PRODUCTIVO ✅
 
