@@ -18,6 +18,10 @@ public class HumanBehaviorService {
         pause(page, ScraperConfig.HUMAN_PAUSE_MIN_MS, ScraperConfig.HUMAN_PAUSE_MAX_MS);
     }
 
+    public void pauseInteraction(Page page) {
+        page.waitForTimeout(ScraperConfig.HUMAN_INTERACTION_EXTRA_MS);
+    }
+
     public void pause(Page page, int minMs, int maxMs) {
         int delay = ThreadLocalRandom.current().nextInt(minMs, Math.max(minMs + 1, maxMs + 1));
         page.waitForTimeout(delay);

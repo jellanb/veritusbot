@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper.browser;
 import com.example.veritusbot.config.ResourceCleanupManager;
 import com.example.veritusbot.service.scraper.config.ScraperConfig;
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.Proxy;
 import com.microsoft.playwright.options.WaitUntilState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,12 +22,15 @@ public class BrowserManager {
 
     private final ResourceCleanupManager resourceCleanupManager;
     private final HumanBehaviorService humanBehaviorService;
+    private final ProxySelectorService proxySelectorService;
     private final ConcurrentMap<Page, Path> pageSessionPaths = new ConcurrentHashMap<>();
 
     public BrowserManager(ResourceCleanupManager resourceCleanupManager,
-                          HumanBehaviorService humanBehaviorService) {
+                          HumanBehaviorService humanBehaviorService,
+                          ProxySelectorService proxySelectorService) {
         this.resourceCleanupManager = resourceCleanupManager;
         this.humanBehaviorService = humanBehaviorService;
+        this.proxySelectorService = proxySelectorService;
     }
 
     /**
@@ -54,9 +58,26 @@ public class BrowserManager {
             playwright = Playwright.create();
             resourceCleanupManager.registerPlaywright(playwright);
             
-            browser = playwright.chromium().launch(
-                new BrowserType.LaunchOptions().setHeadless(false).setTimeout(90000)
-            );
+            ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.pickRandomProxyOrNull();
+            BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
+                    .setHeadless(false)
+                    .setTimeout(90000);
+
+            if (selectedProxy != null) {
+                Proxy proxy = new Proxy(selectedProxy.server());
+                if (selectedProxy.username() != null) {
+                    proxy.setUsername(selectedProxy.username());
+                }
+                if (selectedProxy.password() != null) {
+                    proxy.setPassword(selectedProxy.password());
+                }
+                launchOptions.setProxy(proxy);
+                logger.info("Using random proxy for this browser instance");
+            } else {
+                logger.warn("No proxies configured; launching browser without proxy");
+            }
+
+            browser = playwright.chromium().launch(launchOptions);
             resourceCleanupManager.registerBrowser(browser);
 
             Browser.NewContextOptions contextOptions = new Browser.NewContextOptions()

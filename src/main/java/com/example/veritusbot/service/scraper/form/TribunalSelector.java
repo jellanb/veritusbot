@@ -56,6 +56,7 @@ public class TribunalSelector {
 
                 logger.debug("🔁 Attempt {} to open dropdown", i + 1);
 
+                humanBehaviorService.pauseInteraction(frame.page());
                 selectButton.click(new Locator.ClickOptions().setTimeout(5000));
 
                 try {
@@ -146,6 +147,7 @@ public class TribunalSelector {
                 element.first().waitFor(new Locator.WaitForOptions().setTimeout(10000));
                 element.first().scrollIntoViewIfNeeded();
                 humanBehaviorService.pause(frame.page(), 250, 650);
+                humanBehaviorService.pauseInteraction(frame.page());
                 element.first().click(new Locator.ClickOptions().setTimeout(5000));
                 logger.debug("✓ Tribunal selected successfully");
             } else {
@@ -176,6 +178,7 @@ public class TribunalSelector {
             }
 
             if (selectButton.count() > 0) {
+                humanBehaviorService.pauseInteraction(frame.page());
                 selectButton.first().click(new Locator.ClickOptions().setTimeout(3000));
                 humanBehaviorService.pause(frame.page(), 120, 360);
                 logger.debug("✓ Dropdown closed successfully");
