@@ -8,6 +8,7 @@ import com.microsoft.playwright.options.WaitUntilState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +20,9 @@ import java.util.concurrent.ConcurrentMap;
 @Component
 public class BrowserManager {
     private static final Logger logger = LoggerFactory.getLogger(BrowserManager.class);
+
+    @Value("${app.scraper.browser.headless:true}")
+    private boolean headlessBrowser;
 
     private final ResourceCleanupManager resourceCleanupManager;
     private final HumanBehaviorService humanBehaviorService;
@@ -60,7 +64,7 @@ public class BrowserManager {
             
             ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.pickRandomProxyOrNull();
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
-                    .setHeadless(false)
+                    .setHeadless(headlessBrowser)
                     .setTimeout(90000);
 
             if (selectedProxy != null) {

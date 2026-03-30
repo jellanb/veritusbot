@@ -451,7 +451,287 @@ SELECT COUNT(*) FROM personas_procesadas WHERE procesado = 1;
 SELECT COUNT(*) FROM causas;
 ```
 
-## 🚀 Deploy en Producción
+## 🚀 Deploy en VPS - Guía Paso a Paso
+
+### Requisitos en el VPS
+- Java 21+
+- SQL Server 2022+ (o conexión a BD existente)
+- Git instalado
+- 4GB RAM mínimo
+- 2 cores CPU
+- Acceso a internet
+- Acceso a los proxies configurados
+
+### 🔄 Descargar e Instalar Cambios en VPS
+
+#### **Paso 1: Conectar al VPS**
+```bash
+ssh usuario@tu-vps.com
+# O si tienes alias
+ssh tu-vps
+```
+
+#### **Paso 2: Navegar al Directorio del Proyecto**
+```bash
+cd ~/veritusbot
+# O el directorio donde tengas el proyecto
+# Por ejemplo: /opt/veritusbot o /home/usuario/veritusbot
+```
+
+#### **Paso 3: Descargar los Cambios desde Git**
+```bash
+# Si es la primera vez (clonar repositorio)
+cd ~
+git clone https://github.com/TU_USUARIO/veritusbot.git
+cd veritusbot
+
+# Si ya tienes el repositorio (traer cambios)
+git pull origin main
+# O si usas rama diferente
+git pull origin tu-rama
+```
+
+#### **Paso 4: Revisar los Cambios (Opcional)**
+```bash
+# Ver qué cambió
+git log --oneline -5
+
+# Ver archivos modificados
+git status
+
+# Ver cambios específicos en application.properties
+git diff src/main/resources/application.properties
+```
+
+#### **Paso 5: Compilar la Aplicación**
+```bash
+# Limpiar compilación anterior
+./mvnw clean
+
+# Compilar sin ejecutar tests (más rápido)
+./mvnw package -DskipTests
+
+# Si quieres ejecutar tests también (más lento)
+./mvnw clean package
+```
+
+#### **Paso 6: Detener la Versión Anterior (si está corriendo)**
+```bash
+# Si está corriendo como proceso foreground
+# Presiona Ctrl+C
+
+# Si está corriendo como background/servicio
+pkill -f "java -jar"
+# O si usas systemd
+sudo systemctl stop veritusbot
+```
+
+#### **Paso 7: Ejecutar la Nueva Versión**
+
+**Opción A: Ejecución Manual (para pruebas)**
+```bash
+java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+```
+
+**Opción B: Ejecución en Background**
+```bash
+nohup java -jar target/veritusbot-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+
+# Ver que está corriendo
+ps aux | grep java
+
+# Ver logs en tiempo real
+tail -f app.log
+```
+
+**Opción C: Ejecución con More Memory**
+```bash
+# Si tienes suficiente memoria
+nohup java -Xmx2G -jar target/veritusbot-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+```
+
+**Opción D: Crear Servicio Systemd (Recomendado para producción)**
+```bash
+# Crear archivo de servicio
+sudo nano /etc/systemd/system/veritusbot.service
+```
+
+Pega el siguiente contenido:
+```ini
+[Unit]
+Description=Veritus Bot - PJUD Scraper
+After=network.target
+
+[Service]
+Type=simple
+User=tu-usuario
+WorkingDirectory=/home/tu-usuario/veritusbot
+ExecStart=/usr/bin/java -Xmx2G -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:/home/tu-usuario/veritusbot/app.log
+StandardError=append:/home/tu-usuario/veritusbot/app.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Luego:
+```bash
+# Recargar systemd
+sudo systemctl daemon-reload
+
+# Iniciar el servicio
+sudo systemctl start veritusbot
+
+# Habilitarlo para que inicie con el VPS
+sudo systemctl enable veritusbot
+
+# Ver estado
+sudo systemctl status veritusbot
+
+# Ver logs
+journalctl -u veritusbot -f
+```
+
+### ✅ Navegador en Modo Headless
+
+**Desde v2.3:** Por defecto, Chromium se ejecuta en modo `headless=true` (sin interfaz gráfica).
+
+Esto es ideal para VPS sin servidor X11. El navegador funciona correctamente sin GUI.
+
+#### Para Desarrollo Local (Ver navegador con interfaz)
+
+Si quieres ver el navegador funcionando en tu máquina local:
+
+```bash
+# Edita application.properties
+app.scraper.browser.headless=false
+
+# Ejecuta
+java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+```
+
+El navegador aparecerá en pantalla mientras ejecuta las búsquedas.
+
+### ✅ Verificar que la Aplicación Está Corriendo
+
+```bash
+# Verificar que el puerto 8083 esté abierto
+netstat -tuln | grep 8083
+# O
+ss -tuln | grep 8083
+
+# Hacer un test a la API
+curl http://localhost:8083/api/test
+# Esperado: ✓ API funcionando correctamente
+
+# Verificar logs
+tail -f app.log
+```
+
+### 🔍 Verificar Configuración de Proxies
+
+En la aplicación:
+```bash
+# Ver que los proxies están cargados
+grep -E "proxi|userProxi|passProxi" src/main/resources/application.properties
+```
+
+En logs durante ejecución (buscar):
+```
+Using random proxy for this browser instance
+```
+
+### 🐛 Troubleshooting - Errores Comunes
+
+#### Error: "Cannot connect to SQL Server"
+```bash
+# Verificar que SQL Server esté disponible
+# Si está local en el VPS
+docker ps | grep sqlserver
+# O
+systemctl status mssql-server
+
+# Si es BD remota, verificar conectividad
+telnet bd-servidor.com 1433
+```
+
+#### Error: "Address already in use: 8083"
+```bash
+# Matar proceso en puerto 8083
+sudo lsof -i :8083
+sudo kill -9 <PID>
+
+# O cambiar puerto en application.properties
+# server.port=8084
+```
+
+#### Error: "Permission denied" o "No such file or directory"
+```bash
+# Hacer scripts ejecutables
+chmod +x mvnw
+
+# O usar Maven instalado globalmente
+mvn clean package -DskipTests
+```
+
+#### Error: "OutOfMemoryError"
+```bash
+# Aumentar memoria
+java -Xmx3G -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+```
+
+### 📝 Script Automatizado (Opcional)
+
+Crea un archivo `deploy-vps.sh` en el raíz del proyecto:
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚀 Iniciando deploy en VPS..."
+
+# Paso 1: Descargar cambios
+echo "📥 Descargando cambios..."
+git pull origin main
+
+# Paso 2: Detener versión anterior
+echo "⏹️  Deteniendo versión anterior..."
+pkill -f "java -jar" || true
+sleep 3
+
+# Paso 3: Compilar
+echo "🔨 Compilando..."
+./mvnw clean package -DskipTests
+
+# Paso 4: Iniciar nueva versión
+echo "🚀 Iniciando nueva versión..."
+nohup java -Xmx2G -jar target/veritusbot-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+
+sleep 5
+
+# Paso 5: Verificar
+echo "✅ Verificando que está corriendo..."
+if pgrep -f "java -jar" > /dev/null; then
+    echo "✅ Aplicación iniciada correctamente"
+    echo "📊 Ver logs: tail -f app.log"
+    curl http://localhost:8083/api/test || echo "⏳ Espera a que la aplicación termine de iniciar..."
+else
+    echo "❌ Error: Aplicación no inició"
+    tail -20 app.log
+fi
+```
+
+Usa:
+```bash
+chmod +x deploy-vps.sh
+./deploy-vps.sh
+```
+
+---
+
+## 🚀 Deploy en Producción (Configuración Avanzada)
 
 ### Requisitos
 - Java 21+
@@ -460,16 +740,29 @@ SELECT COUNT(*) FROM causas;
 - 2 cores CPU
 - Acceso a internet
 
-### Pasos
-1. Compilar: `mvn clean package`
+### Pasos Principales
+1. Compilar: `./mvnw clean package`
 2. Copiar JAR a servidor
 3. Configurar `application.properties` con credenciales reales
 4. Asegurar que SQL Server está disponible
-5. Ejecutar: `java -Xmx2G -jar veritusbot-0.0.1-SNAPSHOT.jar`
+5. Ejecutar con opciones de memoria: `java -Xmx2G -jar veritusbot-0.0.1-SNAPSHOT.jar`
 
 ---
 
-**Versión:** 2.2 (Con Autenticación JWT)  
-**Última actualización:** 26 Marzo 2026  
+**Versión:** 2.3.1 (Fix: Headless Browser Mode por Defecto)  
+**Última actualización:** 30 Marzo 2026  
 **Estado:** PRODUCTIVO ✅
+
+### 📋 Cambios Recientes (v2.3.1)
+- ✅ **Fix Critical:** Chromium ahora corre en modo `headless=true` por defecto (sin X Server necesario)
+- ✅ **VPS Compatible:** Ya no requiere `xvfb-run` para ejecutar en VPS
+- ✅ **Local Configurable:** Opción `app.scraper.browser.headless=false` para debugging con GUI
+- ✅ **Error Resuelto:** "Missing X server or $DISPLAY" ya no ocurre en VPS
+
+### 📋 Cambios Anteriores (v2.3)
+- ✅ **Soporte de Proxies Aleatorios:** Configura 6 proxies con usuario/contraseña en `application.properties`
+- ✅ **Selección Aleatoria de Proxy:** Cada navegador elige un proxy aleatoriamente por cliente/año
+- ✅ **Aumento de Tiempos:** +3 segundos antes de cada interacción (click, select, fill, submit)
+- ✅ **Logs Mejorados:** Muestra qué proxy se está usando en cada instancia del navegador
+- ✅ **Guía de Deploy VPS:** Pasos completos para descargar e instalar cambios en VPS
 

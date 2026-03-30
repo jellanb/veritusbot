@@ -164,21 +164,32 @@ Que hacer:
 
 ## 7) Ejecucion manual de la app
 
-Como el codigo lanza Chromium en modo no headless (`headful`), en VPS sin entorno grafico se debe usar `xvfb-run`.
+**Desde v2.3:** El navegador Chromium se ejecuta en modo `headless=true` (sin interfaz gráfica) por defecto, lo que permite ejecutar en VPS sin X Server.
 
+### Para VPS (Recomendado)
 ```bash
 cd /opt/veritusbot
-nohup xvfb-run -a java -jar target/veritusbot-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+nohup java -jar target/veritusbot-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
 ```
 
-Ver logs:
+### Para desarrollo local (con interfaz visual)
+Si quieres ver el navegador funcionando localmente, edita `application.properties`:
+```properties
+app.scraper.browser.headless=false
+```
 
+Luego ejecuta:
+```bash
+cd /opt/veritusbot
+java -jar target/veritusbot-0.0.1-SNAPSHOT.jar
+```
+
+### Ver logs:
 ```bash
 tail -f /opt/veritusbot/app.log
 ```
 
-Pruebas basicas:
-
+### Pruebas basicas:
 ```bash
 curl -X POST http://127.0.0.1:8083/api/veritus-app/health-auth
 curl -X POST http://127.0.0.1:8083/api/veritus-app/login -H "Content-Type: application/json" -d '{"email":"admin@veritus.com","password":"admin123"}'
@@ -224,11 +235,10 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/opt/veritusbot
-ExecStart=/usr/bin/xvfb-run -a /usr/bin/java -jar /opt/veritusbot/target/veritusbot-0.0.1-SNAPSHOT.jar
+ExecStart=/usr/bin/java -Xms512m -Xmx1024m -jar /opt/veritusbot/target/veritusbot-0.0.1-SNAPSHOT.jar
 SuccessExitStatus=143
 Restart=on-failure
 RestartSec=5
-Environment=JAVA_OPTS=-Xms512m -Xmx1024m
 
 [Install]
 WantedBy=multi-user.target
