@@ -32,6 +32,7 @@ public class ScraperConfig {
     // Human-like timings
     public static final int HUMAN_PAUSE_MIN_MS = 220;
     public static final int HUMAN_PAUSE_MAX_MS = 780;
+    public static final int HUMAN_INTERACTION_EXTRA_MS = 3000;
     public static final int HUMAN_SCROLL_STEPS = 4;
 
     // Selectors

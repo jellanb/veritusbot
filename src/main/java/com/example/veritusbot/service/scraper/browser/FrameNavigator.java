@@ -22,6 +22,7 @@ public class FrameNavigator {
     public void navigateToSearchForm(Page page) {
         try {
             logger.debug("📍 Navigating to search form...");
+            humanBehaviorService.pauseInteraction(page);
             page.evaluate("accesoConsultaCausas()");
             humanBehaviorService.waitForDomAndNetwork(page);
             humanBehaviorService.pauseShort(page);
@@ -83,6 +84,7 @@ public class FrameNavigator {
         try {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
             frame.waitForSelector("a:has-text('Nombre')");
+            humanBehaviorService.pauseInteraction(page);
             frame.locator("a:has-text('Nombre')").click();
             humanBehaviorService.pauseShort(page);
             logger.debug("✓ Tab clicked");

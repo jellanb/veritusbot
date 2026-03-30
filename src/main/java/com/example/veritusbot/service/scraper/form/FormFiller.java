@@ -1,6 +1,7 @@
 package com.example.veritusbot.service.scraper.form;
 
 import com.example.veritusbot.dto.PersonaDTO;
+import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import org.slf4j.Logger;
@@ -10,6 +11,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class FormFiller {
     private static final Logger logger = LoggerFactory.getLogger(FormFiller.class);
+    private final HumanBehaviorService humanBehaviorService;
+
+    public FormFiller(HumanBehaviorService humanBehaviorService) {
+        this.humanBehaviorService = humanBehaviorService;
+    }
 
     /**
      * Fill the search form with person data
@@ -21,9 +27,13 @@ public class FormFiller {
         try {
             logger.debug("📝 Filling search form for: {} (year: {})", person.getNombres(), year);
 
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomNombre']", person.getNombres());
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomApePaterno']", person.getApellidoPaterno());
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomApeMaterno']", person.getApellidoMaterno());
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[id='nomEra']", String.valueOf(year));
 
             logger.debug("✓ Form filled successfully");
@@ -41,6 +51,7 @@ public class FormFiller {
     public void fillTribunal(Frame frame, String tribunalName) {
         try {
             logger.debug("📝 Filling tribunal field: {}", tribunalName);
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomTribunal']", tribunalName);
             logger.debug("✓ Tribunal field filled");
         } catch (Exception e) {
@@ -58,6 +69,7 @@ public class FormFiller {
             logger.debug("🔍 Submitting search form...");
             Locator submitButton = frame.locator("#btnConConsultaNom");
             if (submitButton.count() > 0) {
+                humanBehaviorService.pauseInteraction(frame.page());
                 submitButton.click();
                 logger.debug("✓ Form submitted successfully");
             } else {
@@ -77,6 +89,7 @@ public class FormFiller {
     public void selectCompetence(Frame frame, String optionValue) {
         try {
             logger.debug("📝 Selecting competence: {}", optionValue);
+            humanBehaviorService.pauseInteraction(frame.page());
             frame.locator("select[name='nomCompetencia']").selectOption(optionValue);
             logger.debug("✓ Competence selected");
         } catch (Exception e) {
