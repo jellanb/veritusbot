@@ -20,7 +20,24 @@ public interface Phase {
      * @return List of results found
      * @throws RetryableScraperException when a retryable error occurs (browser/network)
      */
-    List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear) throws RetryableScraperException;
+    default List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear)
+            throws RetryableScraperException {
+        return execute(page, person, startYear, endYear, 0);
+    }
+
+    /**
+     * Execute the phase scraping logic resuming from a tribunal position.
+     *
+     * @param page Playwright page instance
+     * @param person person to search
+     * @param startYear Start year for the search range
+     * @param endYear End year for the search range
+     * @param startTribunalPosition zero-based tribunal position to resume from
+     * @return List of results found
+     * @throws RetryableScraperException when a retryable error occurs (browser/network)
+     */
+    List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear, int startTribunalPosition)
+            throws RetryableScraperException;
 
     /**
      * Get the name of this phase

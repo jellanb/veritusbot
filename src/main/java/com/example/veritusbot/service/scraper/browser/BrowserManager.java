@@ -28,6 +28,7 @@ public class BrowserManager {
     private final HumanBehaviorService humanBehaviorService;
     private final ProxySelectorService proxySelectorService;
     private final ConcurrentMap<Page, Path> pageSessionPaths = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Page, String> pageProxyLabels = new ConcurrentHashMap<>();
 
     public BrowserManager(ResourceCleanupManager resourceCleanupManager,
                           HumanBehaviorService humanBehaviorService,
@@ -106,6 +107,7 @@ public class BrowserManager {
             Page page = context.newPage();
             resourceCleanupManager.registerPage(page);
             pageSessionPaths.put(page, sessionPath);
+            pageProxyLabels.put(page, selectedProxy != null ? selectedProxy.server() : "no-proxy");
             
             logger.info("✓ Browser launched successfully");
             return page;
@@ -164,6 +166,7 @@ public class BrowserManager {
             if (page != null) {
                 BrowserContext context = page.context();
                 Path sessionPath = pageSessionPaths.remove(page);
+                pageProxyLabels.remove(page);
 
                 if (sessionPath != null && context != null) {
                     persistSessionState(context, sessionPath);
@@ -194,6 +197,18 @@ public class BrowserManager {
         } catch (Exception e) {
             logger.error("❌ Error closing browser: ", e);
         }
+    }
+
+    /**
+     * Get proxy label associated with a page/browser instance.
+     * @param page Page instance
+     * @return Proxy server label or fallback value
+     */
+    public String getProxyLabel(Page page) {
+        if (page == null) {
+            return "unknown-proxy";
+        }
+        return pageProxyLabels.getOrDefault(page, "unknown-proxy");
     }
 
     private void persistSessionState(BrowserContext context, Path sessionPath) {
