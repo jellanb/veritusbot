@@ -63,7 +63,7 @@ public class BrowserManager {
             playwright = Playwright.create();
             resourceCleanupManager.registerPlaywright(playwright);
             
-            ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.pickRandomProxyOrNull();
+            ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.pickNextProxyOrNull();
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
                     .setHeadless(headlessBrowser)
                     .setTimeout(90000);
@@ -77,7 +77,7 @@ public class BrowserManager {
                     proxy.setPassword(selectedProxy.password());
                 }
                 launchOptions.setProxy(proxy);
-                logger.info("Using random proxy for this browser instance");
+                logger.info("Using sequential proxy for this browser instance: {}", selectedProxy.server());
             } else {
                 logger.warn("No proxies configured; launching browser without proxy");
             }
