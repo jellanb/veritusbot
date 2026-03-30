@@ -9,6 +9,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class FrameNavigator {
     private static final Logger logger = LoggerFactory.getLogger(FrameNavigator.class);
+    private final HumanBehaviorService humanBehaviorService;
+
+    public FrameNavigator(HumanBehaviorService humanBehaviorService) {
+        this.humanBehaviorService = humanBehaviorService;
+    }
 
     /**
      * Navigate to the search form section
@@ -18,7 +23,8 @@ public class FrameNavigator {
         try {
             logger.debug("📍 Navigating to search form...");
             page.evaluate("accesoConsultaCausas()");
-            page.waitForTimeout(2000);
+            humanBehaviorService.waitForDomAndNetwork(page);
+            humanBehaviorService.pauseShort(page);
             logger.debug("✓ Navigated to search form");
         } catch (Exception e) {
             logger.error("❌ Error navigating to search form: ", e);
@@ -78,7 +84,7 @@ public class FrameNavigator {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
             frame.waitForSelector("a:has-text('Nombre')");
             frame.locator("a:has-text('Nombre')").click();
-            page.waitForTimeout(1500);
+            humanBehaviorService.pauseShort(page);
             logger.debug("✓ Tab clicked");
         } catch (Exception e) {
             logger.error("❌ Error clicking search tab: ", e);
@@ -96,7 +102,7 @@ public class FrameNavigator {
             logger.debug("⚖️  Setting competence to Civil...");
             frame.waitForSelector("select[name='nomCompetencia']");
             frame.locator("select[name='nomCompetencia']").selectOption("3");
-            page.waitForTimeout(1000);
+            humanBehaviorService.pauseShort(page);
             logger.debug("✓ Competence set to Civil");
         } catch (Exception e) {
             logger.error("❌ Error setting competence: ", e);

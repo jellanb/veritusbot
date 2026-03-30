@@ -2,6 +2,7 @@ package com.example.veritusbot.service.scraper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -87,7 +88,7 @@ class ScraperOrchestratorTest {
 
         when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(phase1Person));
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of(phase2Person));
-        when(browserManager.launchBrowser()).thenReturn(page);
+        when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
 
         when(phase1Scraper.execute(eq(page), eq(phase1Person), eq(2020), eq(2020)))
@@ -120,7 +121,7 @@ class ScraperOrchestratorTest {
 
         when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
-        when(browserManager.launchBrowser()).thenReturn(firstAttemptPage, secondAttemptPage);
+        when(browserManager.launchBrowser(anyString())).thenReturn(firstAttemptPage, secondAttemptPage);
         doNothing().when(browserManager).navigateTo(any(Page.class), any());
 
         when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022)))
@@ -132,7 +133,7 @@ class ScraperOrchestratorTest {
         List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
 
         assertEquals(1, results.size());
-        verify(browserManager, times(2)).launchBrowser();
+        verify(browserManager, times(2)).launchBrowser(anyString());
         verify(browserManager, times(2)).navigateTo(any(Page.class), eq("https://example.test/pjud"));
         verify(phase1Scraper, times(2)).execute(any(Page.class), eq(person), eq(2022), eq(2022));
         verify(browserManager, times(1)).closeBrowser(firstAttemptPage);
@@ -145,7 +146,7 @@ class ScraperOrchestratorTest {
 
         when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
-        when(browserManager.launchBrowser()).thenReturn(page);
+        when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
 
         when(phase1Scraper.execute(eq(page), eq(person), eq(2023), eq(2023)))
@@ -156,7 +157,7 @@ class ScraperOrchestratorTest {
         List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
 
         assertEquals(0, results.size());
-        verify(browserManager, times(5)).launchBrowser();
+        verify(browserManager, times(5)).launchBrowser(anyString());
         verify(phase1Scraper, times(5)).execute(eq(page), eq(person), eq(2023), eq(2023));
         verify(browserManager, times(5)).closeBrowser(page);
     }

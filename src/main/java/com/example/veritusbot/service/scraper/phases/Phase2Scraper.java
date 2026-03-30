@@ -4,6 +4,7 @@ import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.ResultPersistenceService;
 import com.example.veritusbot.service.scraper.browser.FrameNavigator;
+import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
 import com.example.veritusbot.service.scraper.form.FormFiller;
 import com.example.veritusbot.service.scraper.form.TribunalSelector;
 import com.example.veritusbot.service.scraper.parser.ResultParser;
@@ -30,15 +31,18 @@ public class Phase2Scraper implements Phase {
     private final ResultParser resultParser;
     private final FrameNavigator frameNavigator;
     private final ResultPersistenceService resultPersistenceService;
+    private final HumanBehaviorService humanBehaviorService;
 
     public Phase2Scraper(FormFiller formFiller, TribunalSelector tribunalSelector,
                          ResultParser resultParser, FrameNavigator frameNavigator,
-                         ResultPersistenceService resultPersistenceService) {
+                         ResultPersistenceService resultPersistenceService,
+                         HumanBehaviorService humanBehaviorService) {
         this.formFiller = formFiller;
         this.tribunalSelector = tribunalSelector;
         this.resultParser = resultParser;
         this.frameNavigator = frameNavigator;
         this.resultPersistenceService = resultPersistenceService;
+        this.humanBehaviorService = humanBehaviorService;
     }
 
     @Override
@@ -69,7 +73,7 @@ public class Phase2Scraper implements Phase {
 
             // Open dropdown and load tribunals
             tribunalSelector.openDropdown(searchFrame);
-            page.waitForTimeout(1500);
+            humanBehaviorService.pauseShort(page);
             Map<String, Integer> allTribunals = tribunalSelector.loadAllTribunals(searchFrame);
 
             // Filter to exclude Santiago tribunals
@@ -94,15 +98,16 @@ public class Phase2Scraper implements Phase {
 
                     // Open dropdown
                     tribunalSelector.openDropdown(searchFrame);
-                    page.waitForTimeout(500);
+                    humanBehaviorService.pauseShort(page);
 
                     // Select tribunal
                     tribunalSelector.selectTribunal(searchFrame, tribunalName, tribunalIndex);
-                    page.waitForTimeout(2000);
+                    humanBehaviorService.pauseShort(page);
 
                     // Submit search
                     formFiller.submitForm(searchFrame);
-                    page.waitForTimeout(15000);
+                    humanBehaviorService.waitForDomAndNetwork(page);
+                    humanBehaviorService.pause(page, 600, 1600);
 
                     // Parse results
                     String html = page.content();
