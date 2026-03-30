@@ -23,7 +23,7 @@ import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
 public class ScraperOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(ScraperOrchestrator.class);
 
-    @Value("${app.scraper.max-threads:2}")
+    @Value("${app.scraper.max-threads:3}")
     private int maxThreads;
 
     private final BrowserManager browserManager;
