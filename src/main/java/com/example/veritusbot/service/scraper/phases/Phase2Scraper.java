@@ -56,6 +56,13 @@ public class Phase2Scraper implements Phase {
 
         try {
             logger.info("▶️  Starting Phase 2 (Other tribunals - excluding Santiago)...");
+            logger.debug("🧾 Phase 2 input person={} {} {}, year={} resumeTribunal={} proxy={}",
+                    person.getNombres(),
+                    person.getApellidoPaterno(),
+                    person.getApellidoMaterno(),
+                    startYear,
+                    startTribunalPosition,
+                    browserManager.getProxyLabel(page));
 
             // Navigate to search form
             frameNavigator.navigateToSearchForm(page);
@@ -63,6 +70,7 @@ public class Phase2Scraper implements Phase {
             // Get search frame
             Frame searchFrame = frameNavigator.getSearchFrame(page);
             if (searchFrame == null) {
+                logger.debug("🪟 Search frame not found, using main frame");
                 searchFrame = page.mainFrame();
             }
 
@@ -79,6 +87,7 @@ public class Phase2Scraper implements Phase {
             tribunalSelector.openDropdown(searchFrame);
             humanBehaviorService.pauseShort(page);
             Map<String, Integer> allTribunals = tribunalSelector.loadAllTribunals(searchFrame);
+            logger.debug("📚 Loaded {} total tribunals before filtering", allTribunals.size());
 
             // Filter to exclude Santiago tribunals
             List<Map.Entry<String, Integer>> otherTribunals = filterOtherTribunals(allTribunals);
@@ -100,9 +109,14 @@ public class Phase2Scraper implements Phase {
             for (int tribunalPosition = resumePosition; tribunalPosition < otherTribunals.size(); tribunalPosition++) {
                 Map.Entry<String, Integer> tribunalEntry = otherTribunals.get(tribunalPosition);
                 String tribunalName = tribunalEntry.getKey();
+                logger.debug("📍 Phase 2 tribunal checkpoint {}/{} -> {}",
+                        tribunalPosition + 1,
+                        otherTribunals.size(),
+                        tribunalName);
                 try {
                     Integer tribunalIndex = tribunalEntry.getValue();
                     if (tribunalIndex == null) {
+                        logger.debug("⏭️  Skipping tribunal {} because index is null", tribunalName);
                         continue;
                     }
 
@@ -135,6 +149,8 @@ public class Phase2Scraper implements Phase {
                         // ✅ PERSIST IMMEDIATELY WHEN FOUND (not at the end)
                         logger.debug("💾 Persisting {} results found in tribunal: {}", tribunalResults.size(), tribunalName);
                         resultPersistenceService.saveResults(tribunalResults, person);
+                    } else {
+                        logger.debug("ℹ️  No results in tribunal {} for year {}", tribunalName, startYear);
                     }
 
                 } catch (Exception e) {
@@ -181,6 +197,7 @@ public class Phase2Scraper implements Phase {
             }
         }
         others.sort(Comparator.comparingInt(entry -> entry.getValue() != null ? entry.getValue() : Integer.MAX_VALUE));
+        logger.debug("🧮 Non-Santiago tribunal filter reduced {} -> {} entries", allTribunals.size(), others.size());
         return others;
     }
 

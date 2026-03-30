@@ -29,12 +29,15 @@ public class TribunalSelector {
             logger.debug("📂 Opening tribunal dropdown...");
 
             Locator selectButton = frame.locator("button[data-toggle='dropdown'][aria-haspopup='listbox']").first();
+            logger.debug("📂 Trying primary dropdown selector");
 
             if (selectButton.count() == 0) {
+                logger.debug("📂 Primary selector not found, trying .dropdown-toggle");
                 selectButton = frame.locator("button.dropdown-toggle").first();
             }
 
             if (selectButton.count() == 0) {
+                logger.debug("📂 Secondary selector not found, trying text-based selector");
                 selectButton = frame.locator("button:has-text('Seleccione')").first();
             }
 
@@ -112,6 +115,7 @@ public class TribunalSelector {
             if (result instanceof Map) {
                 Map<String, Integer> tribunals = (Map<String, Integer>) result;
                 logger.debug("✓ Loaded {} tribunals", tribunals.size());
+                logger.debug("📋 Tribunal map type: {}", tribunals.getClass().getSimpleName());
                 return tribunals;
             }
 
@@ -143,6 +147,7 @@ public class TribunalSelector {
             logger.debug("🖱️  Selecting tribunal: {} (index: {})", tribunalName, index);
 
             Locator element = frame.locator(selector);
+            logger.debug("🖱️  Selector '{}' matched {} elements", selector, element.count());
             if (element.count() > 0) {
                 element.first().waitFor(new Locator.WaitForOptions().setTimeout(10000));
                 element.first().scrollIntoViewIfNeeded();
@@ -171,9 +176,11 @@ public class TribunalSelector {
             // Click the dropdown button again to close it (toggle)
             Locator selectButton = frame.locator("button[data-toggle='dropdown'][aria-haspopup='listbox']").first();
             if (selectButton.count() == 0) {
+                logger.debug("📂 Close fallback: trying .dropdown-toggle selector");
                 selectButton = frame.locator("button.dropdown-toggle");
             }
             if (selectButton.count() == 0) {
+                logger.debug("📂 Close fallback: trying text-based selector");
                 selectButton = frame.locator("button:has-text('Seleccione')");
             }
 

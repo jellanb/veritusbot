@@ -29,12 +29,16 @@ public class FormFiller {
 
             humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomNombre']", person.getNombres());
+            logger.debug("📝 Field nomNombre filled");
             humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomApePaterno']", person.getApellidoPaterno());
+            logger.debug("📝 Field nomApePaterno filled");
             humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[name='nomApeMaterno']", person.getApellidoMaterno());
+            logger.debug("📝 Field nomApeMaterno filled");
             humanBehaviorService.pauseInteraction(frame.page());
             frame.fill("input[id='nomEra']", String.valueOf(year));
+            logger.debug("📝 Field nomEra filled with year {}", year);
 
             logger.debug("✓ Form filled successfully");
         } catch (Exception e) {
@@ -68,6 +72,7 @@ public class FormFiller {
         try {
             logger.debug("🔍 Submitting search form...");
             Locator submitButton = frame.locator("#btnConConsultaNom");
+            logger.debug("🔍 Submit button count: {}", submitButton.count());
             if (submitButton.count() > 0) {
                 humanBehaviorService.pauseInteraction(frame.page());
                 submitButton.click();

@@ -1,5 +1,7 @@
 package com.example.veritusbot.service.scraper.browser;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class ProxySelectorService {
+    private static final Logger logger = LoggerFactory.getLogger(ProxySelectorService.class);
 
     private final AtomicInteger nextProxyIndex = new AtomicInteger(0);
 
@@ -59,13 +62,17 @@ public class ProxySelectorService {
 
     public ProxyConfig pickNextProxyOrNull() {
         List<ProxyConfig> configuredProxies = getConfiguredProxies();
+        logger.debug("🌍 Configured proxies available: {}", configuredProxies.size());
 
         if (configuredProxies.isEmpty()) {
+            logger.debug("🌍 No proxy selected because configuration is empty");
             return null;
         }
 
         int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), configuredProxies.size());
-        return configuredProxies.get(selectedIndex);
+        ProxyConfig selected = configuredProxies.get(selectedIndex);
+        logger.debug("🌍 Selected proxy index {} -> {}", selectedIndex, selected.server());
+        return selected;
     }
 
     private List<ProxyConfig> getConfiguredProxies() {
@@ -89,6 +96,7 @@ public class ProxySelectorService {
         String normalizedPass = normalizeCredentialsValue(password);
 
         proxies.add(new ProxyConfig(normalizedServer, normalizedUser, normalizedPass));
+        logger.debug("🌍 Registered proxy {} (auth={})", normalizedServer, normalizedUser != null);
     }
 
     private String normalizeCredentialsValue(String value) {

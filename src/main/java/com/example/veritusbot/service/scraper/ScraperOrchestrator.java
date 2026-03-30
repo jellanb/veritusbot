@@ -63,15 +63,19 @@ public class ScraperOrchestrator {
 
         try {
             logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", maxThreads);
+            logger.debug("📥 Received {} people to process", people != null ? people.size() : 0);
 
             // Phase 1: Santiago tribunals
             List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(people);
+            logger.debug("🧭 Phase 1 candidate count: {}", phase1People.size());
             
             if (!phase1People.isEmpty()) {
                 logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
                 for (PersonaDTO person : phase1People) {
+                    logger.debug("👤 [PHASE 1] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
                     allResults.addAll(personResults);
+                    logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
 
                     try {
                         logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
@@ -92,12 +96,15 @@ public class ScraperOrchestrator {
 
             // Phase 2: Other tribunals
             List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(people);
+            logger.debug("🧭 Phase 2 candidate count: {}", phase2People.size());
             
             if (!phase2People.isEmpty()) {
                 logger.info("▶️  PHASE 2: Processing other tribunals...");
                 for (PersonaDTO person : phase2People) {
+                    logger.debug("👤 [PHASE 2] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
                     List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
                     allResults.addAll(personResults);
+                    logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
                     
                     // ✅ MARK PERSON AS PROCESSED IMMEDIATELY (within the person loop)
                     try {
@@ -120,6 +127,8 @@ public class ScraperOrchestrator {
         } catch (Exception e) {
             logger.error("❌ Fatal error in scraper: ", e);
         }
+
+        logger.debug("🏁 Scraper orchestrator finished with {} aggregated results", allResults.size());
 
         return allResults;
     }
@@ -153,10 +162,12 @@ public class ScraperOrchestrator {
             // Submit a task for each year
             for (int year = person.getAnioInit(); year <= person.getAnioFin(); year++) {
                 final int currentYear = year;
+                logger.debug("🧵 Scheduling {} year {} for {}", phaseName, currentYear, clientKey);
                 
                 Future<Void> future = executor.submit(() -> {
                     String threadName = String.format("Thread-%s-%d", person.getNombres(), currentYear);
                     Thread.currentThread().setName(threadName);
+                    logger.debug("▶️  [{}] Worker started for year {}", threadName, currentYear);
                     
                     // ✅ RETRY LOGIC: Open new browser on each retry
                     int maxRetries = 5;
@@ -202,6 +213,9 @@ public class ScraperOrchestrator {
                             Integer failedPosition = e.getFailedTribunalPosition();
                             if (failedPosition != null && failedPosition >= 0) {
                                 resumeFromTribunalPosition = Math.max(resumeFromTribunalPosition, failedPosition);
+                                logger.debug("   📍 [{}] Updating resume checkpoint to tribunal position {}",
+                                    Thread.currentThread().getName(),
+                                    resumeFromTribunalPosition);
                             }
 
                             if (!e.isRetryable()) {
@@ -256,6 +270,7 @@ public class ScraperOrchestrator {
                                 errorMsg,
                                 retryCount,
                                 maxRetries);
+                            logger.debug("   🧪 [{}] Unexpected error class: {}", Thread.currentThread().getName(), e.getClass().getName());
                         } finally {
                             // Always close the browser for this attempt (success or failure)
                             if (page != null) {
@@ -273,6 +288,8 @@ public class ScraperOrchestrator {
                             Thread.currentThread().getName(),
                             currentYear,
                             retryCount);
+                    } else {
+                        logger.debug("   🏁 [{}] Year {} finished successfully", Thread.currentThread().getName(), currentYear);
                     }
                     
                     return null;
@@ -288,6 +305,7 @@ public class ScraperOrchestrator {
             for (Future<Void> future : futures) {
                 try {
                     future.get(20, TimeUnit.MINUTES);
+                    logger.debug("   ✅ One year task finished for {}", clientKey);
                 } catch (TimeoutException e) {
                     logger.warn("   ⚠️  Year processing timeout - possible site issue");
                     future.cancel(true);
@@ -305,6 +323,7 @@ public class ScraperOrchestrator {
 
         } finally {
             // Shutdown executor PROPERLY
+            logger.debug("   📴 Shutting down executor for {}", buildClientKey(person));
             executor.shutdown();
             try {
                 if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {

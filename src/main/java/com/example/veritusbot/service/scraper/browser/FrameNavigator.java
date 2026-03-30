@@ -41,6 +41,7 @@ public class FrameNavigator {
     public Frame getSearchFrame(Page page) {
         try {
             logger.debug("🔍 Getting search frame...");
+            logger.debug("🧱 Total frames available: {}", page.frames().size());
 
             // Try multiple selectors for the iframe
             Frame frame = null;
@@ -55,6 +56,7 @@ public class FrameNavigator {
 
             // If not found by name, try to find by URL
             if (frame == null) {
+                logger.debug("🔎 Frame by name not found, trying URL strategy");
                 frame = page.frames().stream()
                     .filter(f -> f.url().contains("pjud"))
                     .findFirst()
@@ -66,7 +68,7 @@ public class FrameNavigator {
                 return null;
             }
 
-            logger.debug("✓ Search frame obtained");
+            logger.debug("✓ Search frame obtained (name='{}', url='{}')", frame.name(), frame.url());
             return frame;
 
         } catch (Exception e) {
@@ -83,6 +85,7 @@ public class FrameNavigator {
     public void clickSearchByNameTab(Frame frame, Page page) {
         try {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
+            logger.debug("🔗 Waiting selector a:has-text('Nombre')");
             frame.waitForSelector("a:has-text('Nombre')");
             humanBehaviorService.pauseInteraction(page);
             humanBehaviorService.pauseInteraction(page);
@@ -103,6 +106,7 @@ public class FrameNavigator {
     public void setCompetenceToCivil(Frame frame, Page page) {
         try {
             logger.debug("⚖️  Setting competence to Civil...");
+            logger.debug("⚖️  Waiting selector select[name='nomCompetencia'] and setting value=3");
             frame.waitForSelector("select[name='nomCompetencia']");
             frame.locator("select[name='nomCompetencia']").selectOption("3");
             humanBehaviorService.pauseShort(page);

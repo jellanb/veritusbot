@@ -98,9 +98,12 @@ public class ResultParser {
      */
     public boolean hasResults(String htmlContent) {
         try {
+            logger.debug("🔎 Checking if HTML contains results");
             Document doc = Jsoup.parse(htmlContent);
             Element noResultsMessage = doc.selectFirst("tbody#verDetalleNombre tr td[colspan='5']");
-            return noResultsMessage == null || !noResultsMessage.text().contains("No se han encontrado resultados");
+            boolean hasResults = noResultsMessage == null || !noResultsMessage.text().contains("No se han encontrado resultados");
+            logger.debug("🔎 hasResults={}", hasResults);
+            return hasResults;
         } catch (Exception e) {
             logger.warn("⚠ Error checking for results: {}", e.getMessage());
             return false;
@@ -116,8 +119,10 @@ public class ResultParser {
         List<String[]> results = new ArrayList<>();
 
         try {
+            logger.debug("📤 Extracting raw result rows from HTML");
             Document doc = Jsoup.parse(htmlContent);
             Elements rows = doc.select("table#dtaTableDetalleNombre tbody#verDetalleNombre tr");
+            logger.debug("📤 Candidate rows found: {}", rows.size());
 
             for (Element row : rows) {
                 if (!row.select("td[colspan]").isEmpty()) {
@@ -135,6 +140,8 @@ public class ResultParser {
                     results.add(rowData);
                 }
             }
+
+            logger.debug("📤 Extracted {} normalized rows", results.size());
 
         } catch (Exception e) {
             logger.error("❌ Error extracting results: ", e);

@@ -57,6 +57,7 @@ public class BrowserManager {
         BrowserContext context = null;
         String safeClientKey = sanitizeClientKey(clientKey);
         Path sessionPath = getSessionPath(safeClientKey);
+        logger.debug("🚀 Launching browser for clientKey={} (sessionPath={}, headless={})", safeClientKey, sessionPath, headlessBrowser);
         
         try {
             // Create NEW instances each time (don't reuse old ones)
@@ -98,6 +99,8 @@ public class BrowserManager {
             if (Files.exists(sessionPath)) {
                 contextOptions.setStorageStatePath(sessionPath);
                 logger.debug("♻ Reusing session state for {}", safeClientKey);
+            } else {
+                logger.debug("🆕 No persisted session found for {}, creating fresh context", safeClientKey);
             }
 
             context = browser.newContext(contextOptions);
@@ -108,6 +111,7 @@ public class BrowserManager {
             resourceCleanupManager.registerPage(page);
             pageSessionPaths.put(page, sessionPath);
             pageProxyLabels.put(page, selectedProxy != null ? selectedProxy.server() : "no-proxy");
+            logger.debug("🧷 Registered page resources (proxyLabel={})", getProxyLabel(page));
             
             logger.info("✓ Browser launched successfully");
             return page;
@@ -147,6 +151,7 @@ public class BrowserManager {
     public void navigateTo(Page page, String url) {
         try {
             logger.info("📄 Navigating to: {}", url);
+            logger.debug("🌐 Proxy in use for navigation: {}", getProxyLabel(page));
             page.navigate(url, new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
             humanBehaviorService.waitForDomAndNetwork(page);
             humanBehaviorService.pauseShort(page);
@@ -167,6 +172,7 @@ public class BrowserManager {
                 BrowserContext context = page.context();
                 Path sessionPath = pageSessionPaths.remove(page);
                 pageProxyLabels.remove(page);
+                logger.debug("🧹 Closing page resources (sessionPath={})", sessionPath);
 
                 if (sessionPath != null && context != null) {
                     persistSessionState(context, sessionPath);
@@ -215,6 +221,7 @@ public class BrowserManager {
         try {
             Files.createDirectories(sessionPath.getParent());
             context.storageState(new BrowserContext.StorageStateOptions().setPath(sessionPath));
+            logger.debug("💾 Session state persisted in {}", sessionPath);
         } catch (Exception e) {
             logger.warn("Could not persist session state in {}: {}", sessionPath, e.getMessage());
         }
