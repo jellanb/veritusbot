@@ -1,5 +1,6 @@
 package com.example.veritusbot.service.scraper.form;
 
+import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.PlaywrightException;
@@ -12,6 +13,11 @@ import java.util.*;
 @Component
 public class TribunalSelector {
     private static final Logger logger = LoggerFactory.getLogger(TribunalSelector.class);
+    private final HumanBehaviorService humanBehaviorService;
+
+    public TribunalSelector(HumanBehaviorService humanBehaviorService) {
+        this.humanBehaviorService = humanBehaviorService;
+    }
 
     /**
      * Open the tribunal dropdown menu
@@ -139,7 +145,7 @@ public class TribunalSelector {
             if (element.count() > 0) {
                 element.first().waitFor(new Locator.WaitForOptions().setTimeout(10000));
                 element.first().scrollIntoViewIfNeeded();
-                Thread.sleep(500);
+                humanBehaviorService.pause(frame.page(), 250, 650);
                 element.first().click(new Locator.ClickOptions().setTimeout(5000));
                 logger.debug("✓ Tribunal selected successfully");
             } else {
@@ -171,7 +177,7 @@ public class TribunalSelector {
 
             if (selectButton.count() > 0) {
                 selectButton.first().click(new Locator.ClickOptions().setTimeout(3000));
-                Thread.sleep(300);
+                humanBehaviorService.pause(frame.page(), 120, 360);
                 logger.debug("✓ Dropdown closed successfully");
             } else {
                 logger.warn("⚠ Could not find dropdown button to close");

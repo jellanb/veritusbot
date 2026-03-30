@@ -5,7 +5,6 @@ import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.PersonProcessingService;
 import com.example.veritusbot.service.PersonaProcesadaPersistenceService;
 import com.example.veritusbot.service.ProcessingStateManager;
-import com.example.veritusbot.service.ResultPersistenceService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase;
 import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
@@ -17,13 +16,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.ThreadLocalRandom;
 import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
 
 @Service
 public class ScraperOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(ScraperOrchestrator.class);
 
-    @Value("${app.scraper.max-threads:3}")
+    @Value("${app.scraper.max-threads:2}")
     private int maxThreads;
 
     private final BrowserManager browserManager;
@@ -147,6 +147,7 @@ public class ScraperOrchestrator {
                 phaseName);
 
             int totalYears = person.getAnioFin() - person.getAnioInit() + 1;
+            String clientKey = buildClientKey(person);
             logger.info("   📅 Total years: {}, Max threads: {}", totalYears, maxThreads);
 
             // Submit a task for each year
@@ -174,7 +175,7 @@ public class ScraperOrchestrator {
                                 maxRetries);
                             
                             // ✅ Create FRESH browser for each attempt
-                            page = browserManager.launchBrowser();
+                            page = browserManager.launchBrowser(clientKey);
                             browserManager.navigateTo(page, pjudUrl);
                             
                             // ✅ Execute phase for this year
@@ -201,7 +202,9 @@ public class ScraperOrchestrator {
                                     maxRetries);
                                 
                                 // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                                long backoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
+                                long baseBackoffMs = (long) Math.pow(2, retryCount - 1) * 1000;
+                                long jitterMs = ThreadLocalRandom.current().nextLong(150, 651);
+                                long backoffMs = baseBackoffMs + jitterMs;
                                 try {
                                     logger.debug("   ⏳ [{}] Waiting {}ms before retry attempt {}...", 
                                         Thread.currentThread().getName(), backoffMs, retryCount + 1);
@@ -300,5 +303,19 @@ public class ScraperOrchestrator {
         }
 
         return new ArrayList<>(personResults);
+    }
+
+    private String buildClientKey(PersonaDTO person) {
+        return String.join("-",
+                normalizeSegment(person.getNombres()),
+                normalizeSegment(person.getApellidoPaterno()),
+                normalizeSegment(person.getApellidoMaterno()));
+    }
+
+    private String normalizeSegment(String value) {
+        if (value == null || value.isBlank()) {
+            return "na";
+        }
+        return value.toLowerCase().replaceAll("[^a-z0-9]", "_");
     }
 }

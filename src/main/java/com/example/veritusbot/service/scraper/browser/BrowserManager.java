@@ -1,19 +1,32 @@
 package com.example.veritusbot.service.scraper.browser;
 
 import com.example.veritusbot.config.ResourceCleanupManager;
+import com.example.veritusbot.service.scraper.config.ScraperConfig;
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.WaitUntilState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Component
 public class BrowserManager {
     private static final Logger logger = LoggerFactory.getLogger(BrowserManager.class);
 
     private final ResourceCleanupManager resourceCleanupManager;
+    private final HumanBehaviorService humanBehaviorService;
+    private final ConcurrentMap<Page, Path> pageSessionPaths = new ConcurrentHashMap<>();
 
-    public BrowserManager(ResourceCleanupManager resourceCleanupManager) {
+    public BrowserManager(ResourceCleanupManager resourceCleanupManager,
+                          HumanBehaviorService humanBehaviorService) {
         this.resourceCleanupManager = resourceCleanupManager;
+        this.humanBehaviorService = humanBehaviorService;
     }
 
     /**
@@ -21,8 +34,20 @@ public class BrowserManager {
      * @return Page instance ready to use
      */
     public Page launchBrowser() {
+        return launchBrowser("default-client");
+    }
+
+    /**
+     * Launch a new Chromium browser instance with client session persistence
+     * @param clientKey Stable key to reuse cookies/storage state
+     * @return Page instance ready to use
+     */
+    public Page launchBrowser(String clientKey) {
         Playwright playwright = null;
         Browser browser = null;
+        BrowserContext context = null;
+        String safeClientKey = sanitizeClientKey(clientKey);
+        Path sessionPath = getSessionPath(safeClientKey);
         
         try {
             // Create NEW instances each time (don't reuse old ones)
@@ -33,9 +58,29 @@ public class BrowserManager {
                 new BrowserType.LaunchOptions().setHeadless(false).setTimeout(90000)
             );
             resourceCleanupManager.registerBrowser(browser);
+
+            Browser.NewContextOptions contextOptions = new Browser.NewContextOptions()
+                    .setUserAgent(ScraperConfig.BROWSER_USER_AGENT)
+                    .setLocale(ScraperConfig.BROWSER_LOCALE)
+                    .setTimezoneId(ScraperConfig.BROWSER_TIMEZONE)
+                    .setViewportSize(ScraperConfig.BROWSER_VIEWPORT_WIDTH, ScraperConfig.BROWSER_VIEWPORT_HEIGHT)
+                    .setExtraHTTPHeaders(Map.of(
+                            "Accept", ScraperConfig.BROWSER_ACCEPT,
+                            "Accept-Language", ScraperConfig.BROWSER_ACCEPT_LANGUAGE
+                    ));
+
+            if (Files.exists(sessionPath)) {
+                contextOptions.setStorageStatePath(sessionPath);
+                logger.debug("♻ Reusing session state for {}", safeClientKey);
+            }
+
+            context = browser.newContext(contextOptions);
+            context.addInitScript("Object.defineProperty(navigator, 'platform', { get: () => '" + ScraperConfig.BROWSER_PLATFORM + "' });");
+            resourceCleanupManager.registerBrowserContext(context);
             
-            Page page = browser.newPage();
+            Page page = context.newPage();
             resourceCleanupManager.registerPage(page);
+            pageSessionPaths.put(page, sessionPath);
             
             logger.info("✓ Browser launched successfully");
             return page;
@@ -47,6 +92,13 @@ public class BrowserManager {
                     browser.close(); 
                 } catch (Exception ex) { 
                     logger.error("Error closing browser after failure", ex); 
+                }
+            }
+            if (context != null) {
+                try {
+                    context.close();
+                } catch (Exception ex) {
+                    logger.error("Error closing context after failure", ex);
                 }
             }
             if (playwright != null) {
@@ -68,7 +120,10 @@ public class BrowserManager {
     public void navigateTo(Page page, String url) {
         try {
             logger.info("📄 Navigating to: {}", url);
-            page.navigate(url);
+            page.navigate(url, new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+            humanBehaviorService.waitForDomAndNetwork(page);
+            humanBehaviorService.pauseShort(page);
+            humanBehaviorService.gradualScroll(page);
             logger.info("✓ Navigation completed");
         } catch (PlaywrightException e) {
             logger.error("❌ Error navigating to URL: {}", url, e);
@@ -82,13 +137,25 @@ public class BrowserManager {
     public void closeBrowser(Page page) {
         try {
             if (page != null) {
+                BrowserContext context = page.context();
+                Path sessionPath = pageSessionPaths.remove(page);
+
+                if (sessionPath != null && context != null) {
+                    persistSessionState(context, sessionPath);
+                }
+
                 // Close page first
                 page.close();
                 resourceCleanupManager.unregisterPage(page);
                 
                 // Then close context
                 try {
-                    Browser browser = page.context().browser();
+                    if (context != null) {
+                        context.close();
+                        resourceCleanupManager.unregisterBrowserContext(context);
+                    }
+
+                    Browser browser = context != null ? context.browser() : null;
                     if (browser != null) {
                         browser.close();
                         resourceCleanupManager.unregisterBrowser(browser);
@@ -102,6 +169,26 @@ public class BrowserManager {
         } catch (Exception e) {
             logger.error("❌ Error closing browser: ", e);
         }
+    }
+
+    private void persistSessionState(BrowserContext context, Path sessionPath) {
+        try {
+            Files.createDirectories(sessionPath.getParent());
+            context.storageState(new BrowserContext.StorageStateOptions().setPath(sessionPath));
+        } catch (Exception e) {
+            logger.warn("Could not persist session state in {}: {}", sessionPath, e.getMessage());
+        }
+    }
+
+    private Path getSessionPath(String safeClientKey) {
+        return Paths.get(ScraperConfig.SESSION_STATE_DIR, safeClientKey + ".json");
+    }
+
+    private String sanitizeClientKey(String value) {
+        if (value == null || value.isBlank()) {
+            return "default-client";
+        }
+        return value.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
     }
 }
 
