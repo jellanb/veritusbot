@@ -5,10 +5,12 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class ProxySelectorService {
+
+    private final AtomicInteger nextProxyIndex = new AtomicInteger(0);
 
     public record ProxyConfig(String server, String username, String password) {
     }
@@ -55,7 +57,18 @@ public class ProxySelectorService {
     @Value("${passProxi6:}")
     private String passProxi6;
 
-    public ProxyConfig pickRandomProxyOrNull() {
+    public ProxyConfig pickNextProxyOrNull() {
+        List<ProxyConfig> configuredProxies = getConfiguredProxies();
+
+        if (configuredProxies.isEmpty()) {
+            return null;
+        }
+
+        int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), configuredProxies.size());
+        return configuredProxies.get(selectedIndex);
+    }
+
+    private List<ProxyConfig> getConfiguredProxies() {
         List<ProxyConfig> configuredProxies = new ArrayList<>(6);
         addIfPresent(configuredProxies, proxi1, userProxi1, passProxi1);
         addIfPresent(configuredProxies, proxi2, userProxi2, passProxi2);
@@ -63,13 +76,7 @@ public class ProxySelectorService {
         addIfPresent(configuredProxies, proxi4, userProxi4, passProxi4);
         addIfPresent(configuredProxies, proxi5, userProxi5, passProxi5);
         addIfPresent(configuredProxies, proxi6, userProxi6, passProxi6);
-
-        if (configuredProxies.isEmpty()) {
-            return null;
-        }
-
-        int selectedIndex = ThreadLocalRandom.current().nextInt(configuredProxies.size());
-        return configuredProxies.get(selectedIndex);
+        return configuredProxies;
     }
 
     private void addIfPresent(List<ProxyConfig> proxies, String server, String username, String password) {
