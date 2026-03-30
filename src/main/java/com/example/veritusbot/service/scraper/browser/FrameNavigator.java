@@ -85,6 +85,7 @@ public class FrameNavigator {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
             frame.waitForSelector("a:has-text('Nombre')");
             humanBehaviorService.pauseInteraction(page);
+            humanBehaviorService.pauseInteraction(page);
             frame.locator("a:has-text('Nombre')").click();
             humanBehaviorService.pauseShort(page);
             logger.debug("✓ Tab clicked");
