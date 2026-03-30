@@ -12,6 +12,7 @@ public class RetryableScraperException extends Exception {
     
     private final boolean isRetryable;
     private final String context;  // e.g., "tribunal: Juzgado de Letras Civil" or "year: 2020"
+    private final Integer failedTribunalPosition;
 
     /**
      * Create a retryable scraper exception
@@ -22,9 +23,27 @@ public class RetryableScraperException extends Exception {
      * @param context Additional context (tribunal name, year, etc.)
      */
     public RetryableScraperException(String message, Throwable cause, boolean isRetryable, String context) {
+        this(message, cause, isRetryable, context, null);
+    }
+
+    /**
+     * Create a retryable scraper exception with tribunal checkpoint info.
+     *
+     * @param message Human-readable error message
+     * @param cause Original exception that caused this error
+     * @param isRetryable Whether ScraperOrchestrator should retry this operation
+     * @param context Additional context (tribunal name, year, etc.)
+     * @param failedTribunalPosition zero-based tribunal position where failure occurred
+     */
+    public RetryableScraperException(String message,
+                                     Throwable cause,
+                                     boolean isRetryable,
+                                     String context,
+                                     Integer failedTribunalPosition) {
         super(message, cause);
         this.isRetryable = isRetryable;
         this.context = context;
+        this.failedTribunalPosition = failedTribunalPosition;
     }
 
     /**
@@ -66,6 +85,13 @@ public class RetryableScraperException extends Exception {
      */
     public String getContext() {
         return context;
+    }
+
+    /**
+     * @return zero-based tribunal position where failure occurred, or null if not applicable
+     */
+    public Integer getFailedTribunalPosition() {
+        return failedTribunalPosition;
     }
 }
 

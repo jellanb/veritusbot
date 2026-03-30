@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -91,9 +93,9 @@ class ScraperOrchestratorTest {
         when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
 
-        when(phase1Scraper.execute(eq(page), eq(phase1Person), eq(2020), eq(2020)))
+        when(phase1Scraper.execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0)))
                 .thenReturn(List.of(phase1Result));
-        when(phase2Scraper.execute(eq(page), eq(phase2Person), eq(2021), eq(2021)))
+        when(phase2Scraper.execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0)))
                 .thenReturn(List.of(phase2Result));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase1Person)).thenReturn(phase1Tracking);
@@ -102,8 +104,8 @@ class ScraperOrchestratorTest {
         List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person));
 
         assertEquals(2, results.size());
-        verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020));
-        verify(phase2Scraper, times(1)).execute(eq(page), eq(phase2Person), eq(2021), eq(2021));
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0));
+        verify(phase2Scraper, times(1)).execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0));
 
         verify(personaProcesadaPersistenceService, times(1))
                 .markTribunalPrincipalAsProcessed(phase1Tracking);
@@ -112,7 +114,7 @@ class ScraperOrchestratorTest {
     }
 
     @Test
-    void scrapePeopleShouldRetryOnRetryableExceptionAndSucceed() throws Exception {
+    void scrapePeopleShouldRetryOnRetryableExceptionAndResumeFromFailedTribunal() throws Exception {
         PersonaDTO person = new PersonaDTO("Maria", "Soto", "Lopez", 2022, 2022);
         ResultDTO retriedResult = new ResultDTO("Maria Soto Lopez", "Tribunal C", 2022, "OK", "detalle");
 
@@ -124,8 +126,9 @@ class ScraperOrchestratorTest {
         when(browserManager.launchBrowser(anyString())).thenReturn(firstAttemptPage, secondAttemptPage);
         doNothing().when(browserManager).navigateTo(any(Page.class), any());
 
-        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022)))
-                .thenThrow(new RetryableScraperException("retry", null, true, "year: 2022"))
+        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0)))
+                .thenThrow(new RetryableScraperException("retry", null, true, "year: 2022", 3));
+        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3)))
                 .thenReturn(List.of(retriedResult));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
@@ -135,13 +138,15 @@ class ScraperOrchestratorTest {
         assertEquals(1, results.size());
         verify(browserManager, times(2)).launchBrowser(anyString());
         verify(browserManager, times(2)).navigateTo(any(Page.class), eq("https://example.test/pjud"));
-        verify(phase1Scraper, times(2)).execute(any(Page.class), eq(person), eq(2022), eq(2022));
+        InOrder inOrder = inOrder(phase1Scraper);
+        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0));
+        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3));
         verify(browserManager, times(1)).closeBrowser(firstAttemptPage);
         verify(browserManager, times(1)).closeBrowser(secondAttemptPage);
     }
 
     @Test
-    void scrapePeopleCurrentlyRetriesEvenWhenExceptionIsNonRetryable() throws Exception {
+    void scrapePeopleShouldNotRetryWhenExceptionIsNonRetryable() throws Exception {
         PersonaDTO person = new PersonaDTO("Tomas", "Rios", "Mena", 2023, 2023);
 
         when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
@@ -149,7 +154,7 @@ class ScraperOrchestratorTest {
         when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
 
-        when(phase1Scraper.execute(eq(page), eq(person), eq(2023), eq(2023)))
+        when(phase1Scraper.execute(eq(page), eq(person), eq(2023), eq(2023), eq(0)))
                 .thenThrow(new RetryableScraperException("fatal", null, false, "year: 2023"));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
@@ -157,9 +162,9 @@ class ScraperOrchestratorTest {
         List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
 
         assertEquals(0, results.size());
-        verify(browserManager, times(5)).launchBrowser(anyString());
-        verify(phase1Scraper, times(5)).execute(eq(page), eq(person), eq(2023), eq(2023));
-        verify(browserManager, times(5)).closeBrowser(page);
+        verify(browserManager, times(1)).launchBrowser(anyString());
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2023), eq(2023), eq(0));
+        verify(browserManager, times(1)).closeBrowser(page);
     }
 }
 

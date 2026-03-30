@@ -162,6 +162,7 @@ public class ScraperOrchestrator {
                     int maxRetries = 5;
                     int retryCount = 0;
                     boolean success = false;
+                    int resumeFromTribunalPosition = 0;
                     
                     while (retryCount < maxRetries && !success) {
                         retryCount++;
@@ -180,7 +181,12 @@ public class ScraperOrchestrator {
                             
                             // ✅ Execute phase for this year
                             // NOTE: Phase1Scraper/Phase2Scraper throw RetryableScraperException on errors
-                            List<ResultDTO> yearResults = phase.execute(page, person, currentYear, currentYear);
+                            List<ResultDTO> yearResults = phase.execute(
+                                    page,
+                                    person,
+                                    currentYear,
+                                    currentYear,
+                                    resumeFromTribunalPosition);
                             personResults.addAll(yearResults);
                             
                             logger.info("   ✅ [{}] Year {} completed. Found {} results",
@@ -192,12 +198,26 @@ public class ScraperOrchestrator {
                             
                         } catch (RetryableScraperException e) {
                             // ✅ Special handling for retryable errors
-                            
-                            if (e.isRetryable() && retryCount < maxRetries) {
+
+                            Integer failedPosition = e.getFailedTribunalPosition();
+                            if (failedPosition != null && failedPosition >= 0) {
+                                resumeFromTribunalPosition = Math.max(resumeFromTribunalPosition, failedPosition);
+                            }
+
+                            if (!e.isRetryable()) {
+                                logger.error("   ❌ [{}] Year {} FAILED (non-retryable): {}. Skipping to next year.",
+                                    Thread.currentThread().getName(),
+                                    currentYear,
+                                    e.getMessage());
+                                break;
+                            }
+
+                            if (retryCount < maxRetries) {
                                 // ✅ Browser/Network error - Retry with new browser
-                                logger.warn("   ⚠️  [{}] Retryable error ({}). Retrying with new browser... (Attempt {}/{})",
+                                logger.warn("   ⚠️  [{}] Retryable error ({}). Retrying with new browser from tribunal position {}... (Attempt {}/{})",
                                     Thread.currentThread().getName(),
                                     e.getContext(),
+                                    resumeFromTribunalPosition,
                                     retryCount,
                                     maxRetries);
                                 
@@ -217,11 +237,10 @@ public class ScraperOrchestrator {
                                 // ↻ Loop continues, opens NEW browser
                                 
                             } else {
-                                // ❌ Non-retryable error or max retries reached
-                                logger.error("   ❌ [{}] Year {} FAILED ({}): {} (Attempt {}/{}). Skipping to next year.",
+                                // ❌ Max retries reached
+                                logger.error("   ❌ [{}] Year {} FAILED (retries exceeded): {} (Attempt {}/{}). Skipping to next year.",
                                     Thread.currentThread().getName(),
                                     currentYear,
-                                    e.isRetryable() ? "retries exceeded" : "non-retryable",
                                     e.getMessage(),
                                     retryCount,
                                     maxRetries);
@@ -250,10 +269,10 @@ public class ScraperOrchestrator {
                     }
                     
                     if (!success) {
-                        logger.error("   ❌ [{}] Year {} could not be completed after {} attempts.",
+                        logger.error("   ❌ [{}] Year {} could not be completed after {} attempt(s).",
                             Thread.currentThread().getName(),
                             currentYear,
-                            maxRetries);
+                            retryCount);
                     }
                     
                     return null;

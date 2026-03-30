@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper.phases;
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.ResultPersistenceService;
+import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.browser.FrameNavigator;
 import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
 import com.example.veritusbot.service.scraper.form.FormFiller;
@@ -32,21 +33,24 @@ public class Phase2Scraper implements Phase {
     private final FrameNavigator frameNavigator;
     private final ResultPersistenceService resultPersistenceService;
     private final HumanBehaviorService humanBehaviorService;
+    private final BrowserManager browserManager;
 
     public Phase2Scraper(FormFiller formFiller, TribunalSelector tribunalSelector,
                          ResultParser resultParser, FrameNavigator frameNavigator,
                          ResultPersistenceService resultPersistenceService,
-                         HumanBehaviorService humanBehaviorService) {
+                         HumanBehaviorService humanBehaviorService,
+                         BrowserManager browserManager) {
         this.formFiller = formFiller;
         this.tribunalSelector = tribunalSelector;
         this.resultParser = resultParser;
         this.frameNavigator = frameNavigator;
         this.resultPersistenceService = resultPersistenceService;
         this.humanBehaviorService = humanBehaviorService;
+        this.browserManager = browserManager;
     }
 
     @Override
-    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear)
+    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear, int startTribunalPosition)
             throws RetryableScraperException {
         List<ResultDTO> results = new ArrayList<>();
 
@@ -77,24 +81,35 @@ public class Phase2Scraper implements Phase {
             Map<String, Integer> allTribunals = tribunalSelector.loadAllTribunals(searchFrame);
 
             // Filter to exclude Santiago tribunals
-            List<String> otherTribunals = filterOtherTribunals(allTribunals);
+            List<Map.Entry<String, Integer>> otherTribunals = filterOtherTribunals(allTribunals);
 
             if (otherTribunals.isEmpty()) {
                 logger.warn("⚠ No other tribunals found");
                 return results;
             }
 
-            logger.info("📋 Phase 2: Found {} other tribunals", otherTribunals.size());
+            int resumePosition = Math.max(0, startTribunalPosition);
+            if (resumePosition >= otherTribunals.size()) {
+                logger.warn("⚠ Resume position {} is out of range for {} tribunals", resumePosition, otherTribunals.size());
+                return results;
+            }
+
+            logger.info("📋 Phase 2: Found {} other tribunals (resume from position {})", otherTribunals.size(), resumePosition);
 
             // Search in each tribunal
-            for (String tribunalName : otherTribunals) {
+            for (int tribunalPosition = resumePosition; tribunalPosition < otherTribunals.size(); tribunalPosition++) {
+                Map.Entry<String, Integer> tribunalEntry = otherTribunals.get(tribunalPosition);
+                String tribunalName = tribunalEntry.getKey();
                 try {
-                    Integer tribunalIndex = allTribunals.get(tribunalName);
+                    Integer tribunalIndex = tribunalEntry.getValue();
                     if (tribunalIndex == null) {
                         continue;
                     }
 
-                    logger.debug("🔍 Searching in: {} (index: {})", tribunalName, tribunalIndex);
+                    logger.debug("🔍 Searching in: {} (index: {}, proxy: {})",
+                            tribunalName,
+                            tribunalIndex,
+                            browserManager.getProxyLabel(page));
 
                     // Open dropdown
                     tribunalSelector.openDropdown(searchFrame);
@@ -134,7 +149,8 @@ public class Phase2Scraper implements Phase {
                             "Browser/Network error while searching tribunal: " + tribunalName,
                             e,
                             true,  // isRetryable
-                            "tribunal: " + tribunalName
+                            "tribunal: " + tribunalName,
+                            tribunalPosition
                         );
                     } else {
                         logger.warn("⚠ Non-retryable error in tribunal {}, continuing to next...", tribunalName);
@@ -156,13 +172,15 @@ public class Phase2Scraper implements Phase {
     /**
      * Filter tribunals that do NOT contain "Santiago" in the name
      */
-    private List<String> filterOtherTribunals(Map<String, Integer> allTribunals) {
-        List<String> others = new ArrayList<>();
-        for (String name : allTribunals.keySet()) {
+    private List<Map.Entry<String, Integer>> filterOtherTribunals(Map<String, Integer> allTribunals) {
+        List<Map.Entry<String, Integer>> others = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : allTribunals.entrySet()) {
+            String name = entry.getKey();
             if (!name.contains("Santiago") && !name.contains("Seleccione")) {
-                others.add(name);
+                others.add(entry);
             }
         }
+        others.sort(Comparator.comparingInt(entry -> entry.getValue() != null ? entry.getValue() : Integer.MAX_VALUE));
         return others;
     }
 
