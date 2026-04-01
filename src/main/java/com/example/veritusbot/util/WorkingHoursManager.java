@@ -1,15 +1,15 @@
 package com.example.veritusbot.util;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Gestiona el rango horario de operación de la aplicación
  * La app solo trabaja entre 8 AM y 8 PM (si está habilitado)
  *
- * Propiedad: app.working-hours.enabled
+ * Configuración runtime en memoria (inicia en true al levantar la app).
  *  - true: Respeta el rango horario (08:00-20:00)
  *  - false: Busca sin importar el rango horario (24/7)
  */
@@ -19,8 +19,7 @@ public class WorkingHoursManager {
     private static final LocalTime HORA_INICIO = LocalTime.of(8, 0);    // 8 AM
     private static final LocalTime HORA_FIN = LocalTime.of(20, 0);      // 8 PM
 
-    @Value("${app.working-hours.enabled:true}")
-    private boolean workingHoursEnabled;
+    private final AtomicBoolean workingHoursEnabled = new AtomicBoolean(true);
 
     /**
      * Verifica si la hora actual está dentro del rango de trabajo
@@ -30,7 +29,7 @@ public class WorkingHoursManager {
      */
     public boolean estaEnRangoHorario() {
         // Si el rango horario está deshabilitado, siempre está en rango (24/7)
-        if (!workingHoursEnabled) {
+        if (!workingHoursEnabled.get()) {
             return true;
         }
 
@@ -57,14 +56,21 @@ public class WorkingHoursManager {
      * @return true si respeta el rango horario, false si trabaja 24/7
      */
     public boolean isWorkingHoursEnabled() {
-        return workingHoursEnabled;
+        return workingHoursEnabled.get();
+    }
+
+    /**
+     * Actualiza en runtime si el rango horario está habilitado.
+     */
+    public void setWorkingHoursEnabled(boolean enabled) {
+        workingHoursEnabled.set(enabled);
     }
 
     /**
      * Obtiene una descripción del estado de configuración
      */
     public String getConfiguracionDescripcion() {
-        if (workingHoursEnabled) {
+        if (workingHoursEnabled.get()) {
             return "✓ Rango horario HABILITADO (08:00-20:00)";
         } else {
             return "✓ Rango horario DESHABILITADO (Funciona 24/7)";

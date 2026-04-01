@@ -1,5 +1,6 @@
 package com.example.veritusbot.service;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -9,11 +10,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class SearchRuntimeConfigService {
 
-    private final AtomicInteger threadsPerPerson = new AtomicInteger(1);
+    private static final int DEFAULT_THREADS_PER_PERSON = 1;
+
+    private final AtomicInteger threadsPerPerson = new AtomicInteger(DEFAULT_THREADS_PER_PERSON);
     private final ProxiSettingService proxiSettingService;
 
     public SearchRuntimeConfigService(ProxiSettingService proxiSettingService) {
         this.proxiSettingService = proxiSettingService;
+    }
+
+    @PostConstruct
+    void initializeDefaults() {
+        // Garantiza valor consistente en cada startup de la app
+        threadsPerPerson.set(DEFAULT_THREADS_PER_PERSON);
     }
 
     public int getThreadsPerPerson() {
