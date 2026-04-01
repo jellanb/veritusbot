@@ -16,10 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class WorkingHoursManager {
 
-    private static final LocalTime HORA_INICIO = LocalTime.of(8, 0);    // 8 AM
-    private static final LocalTime HORA_FIN = LocalTime.of(20, 0);      // 8 PM
+    private static final LocalTime DEFAULT_HORA_INICIO = LocalTime.of(8, 0);    // 8 AM
+    private static final LocalTime DEFAULT_HORA_FIN = LocalTime.of(20, 0);      // 8 PM
 
     private final AtomicBoolean workingHoursEnabled = new AtomicBoolean(true);
+    private volatile LocalTime horaInicio = DEFAULT_HORA_INICIO;
+    private volatile LocalTime horaFin = DEFAULT_HORA_FIN;
 
     /**
      * Verifica si la hora actual está dentro del rango de trabajo
@@ -34,21 +36,21 @@ public class WorkingHoursManager {
         }
 
         LocalTime ahora = LocalDateTime.now().toLocalTime();
-        return !ahora.isBefore(HORA_INICIO) && ahora.isBefore(HORA_FIN);
+        return !ahora.isBefore(horaInicio) && ahora.isBefore(horaFin);
     }
 
     /**
      * Obtiene la hora de inicio del rango
      */
     public LocalTime getHoraInicio() {
-        return HORA_INICIO;
+        return horaInicio;
     }
 
     /**
      * Obtiene la hora de fin del rango
      */
     public LocalTime getHoraFin() {
-        return HORA_FIN;
+        return horaFin;
     }
 
     /**
@@ -67,11 +69,25 @@ public class WorkingHoursManager {
     }
 
     /**
+     * Actualiza en runtime el rango horario permitido para búsquedas.
+     */
+    public void setRangoHorario(LocalTime nuevaHoraInicio, LocalTime nuevaHoraFin) {
+        if (nuevaHoraInicio == null || nuevaHoraFin == null) {
+            throw new IllegalArgumentException("horaInicio y horaFin son obligatorias");
+        }
+        if (!nuevaHoraInicio.isBefore(nuevaHoraFin)) {
+            throw new IllegalArgumentException("horaInicio debe ser menor a horaFin");
+        }
+        this.horaInicio = nuevaHoraInicio;
+        this.horaFin = nuevaHoraFin;
+    }
+
+    /**
      * Obtiene una descripción del estado de configuración
      */
     public String getConfiguracionDescripcion() {
         if (workingHoursEnabled.get()) {
-            return "✓ Rango horario HABILITADO (08:00-20:00)";
+            return String.format("✓ Rango horario HABILITADO (%s-%s)", horaInicio, horaFin);
         } else {
             return "✓ Rango horario DESHABILITADO (Funciona 24/7)";
         }
@@ -93,11 +109,11 @@ public class WorkingHoursManager {
         }
 
         // Si es después de 8 PM
-        if (horaActual.isAfter(HORA_FIN) || horaActual.equals(HORA_FIN)) {
+        if (horaActual.isAfter(horaFin) || horaActual.equals(horaFin)) {
             // Calcular minutos hasta 8 AM del día siguiente
             LocalDateTime proximoInicio = ahora.plusDays(1)
-                .withHour(HORA_INICIO.getHour())
-                .withMinute(HORA_INICIO.getMinute())
+                .withHour(horaInicio.getHour())
+                .withMinute(horaInicio.getMinute())
                 .withSecond(0);
 
             return java.time.temporal.ChronoUnit.MINUTES.between(ahora, proximoInicio);
@@ -105,8 +121,8 @@ public class WorkingHoursManager {
 
         // Si es antes de 8 AM
         LocalDateTime proximoInicio = ahora
-            .withHour(HORA_INICIO.getHour())
-            .withMinute(HORA_INICIO.getMinute())
+            .withHour(horaInicio.getHour())
+            .withMinute(horaInicio.getMinute())
             .withSecond(0);
 
         return java.time.temporal.ChronoUnit.MINUTES.between(ahora, proximoInicio);
@@ -120,23 +136,23 @@ public class WorkingHoursManager {
         LocalTime horaActual = ahora.toLocalTime();
 
         if (estaEnRangoHorario()) {
-            return String.format("En horario de trabajo (hasta las %02d:%02d)", HORA_FIN.getHour(), HORA_FIN.getMinute());
+            return String.format("En horario de trabajo (hasta las %02d:%02d)", horaFin.getHour(), horaFin.getMinute());
         }
 
-        if (horaActual.isAfter(HORA_FIN) || horaActual.equals(HORA_FIN)) {
+        if (horaActual.isAfter(horaFin) || horaActual.equals(horaFin)) {
             LocalDateTime proximoInicio = ahora.plusDays(1)
-                .withHour(HORA_INICIO.getHour())
-                .withMinute(HORA_INICIO.getMinute());
+                .withHour(horaInicio.getHour())
+                .withMinute(horaInicio.getMinute());
 
             return String.format("Próximo horario: %02d:%02d %s",
-                HORA_INICIO.getHour(),
-                HORA_INICIO.getMinute(),
+                horaInicio.getHour(),
+                horaInicio.getMinute(),
                 proximoInicio.toLocalDate());
         }
 
         return String.format("Próximo horario: %02d:%02d hoy",
-            HORA_INICIO.getHour(),
-            HORA_INICIO.getMinute());
+            horaInicio.getHour(),
+            horaInicio.getMinute());
     }
 
     /**
