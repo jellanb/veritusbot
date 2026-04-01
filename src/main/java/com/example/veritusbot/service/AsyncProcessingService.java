@@ -50,7 +50,7 @@ public class AsyncProcessingService {
             logger.info("🧭 All-region search enabled: {}", isAllRegionEnabled);
 
             // Execute scraping in background
-            List<ResultDTO> results = scraperOrchestrator.scrapePeople(people, isAllRegionEnabled);
+            List<ResultDTO> results = scraperOrchestrator.scrapePeople(people, isAllRegionEnabled, requestId);
 
             logger.info("✅ Async processing completed for request: {}", requestId);
             logger.info("📊 Found {} results", results.size());

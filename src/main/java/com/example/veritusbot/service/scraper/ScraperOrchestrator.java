@@ -2,9 +2,11 @@ package com.example.veritusbot.service.scraper;
 
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
+import com.example.veritusbot.model.PersonaProcesada;
 import com.example.veritusbot.service.PersonProcessingService;
 import com.example.veritusbot.service.PersonaProcesadaPersistenceService;
 import com.example.veritusbot.service.ProcessingStateManager;
+import com.example.veritusbot.service.TribunalBusquedaService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase;
 import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
@@ -31,6 +33,7 @@ public class ScraperOrchestrator {
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
     private final PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
+    private final TribunalBusquedaService tribunalBusquedaService;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
@@ -40,12 +43,14 @@ public class ScraperOrchestrator {
                                Phase2Scraper phase2Scraper,
                                PersonProcessingService personProcessingService,
                                ProcessingStateManager processingStateManager,
-                               PersonaProcesadaPersistenceService personaProcesadaPersistenceService) {
+                               PersonaProcesadaPersistenceService personaProcesadaPersistenceService,
+                               TribunalBusquedaService tribunalBusquedaService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
         this.personaProcesadaPersistenceService = personaProcesadaPersistenceService;
+        this.tribunalBusquedaService = tribunalBusquedaService;
 
         // Reset state on initialization to prevent leftover state from previous runs
         processingStateManager.resetState();
@@ -57,37 +62,50 @@ public class ScraperOrchestrator {
      * Persist results immediately to CSV and database after each person
      * @param people List of PersonaDTO objects to scrape
      * @param isAllRegionEnabled true to process all tribunals (Phase 2), false to run only Phase 1
+     * @param requestId Request ID for tracking
      * @return List of ResultDTO with all found results
      */
-    public List<ResultDTO> scrapePeople(List<PersonaDTO> people, boolean isAllRegionEnabled) {
+    public List<ResultDTO> scrapePeople(List<PersonaDTO> people, boolean isAllRegionEnabled, String requestId) {
         List<ResultDTO> allResults = new ArrayList<>();
+        List<PersonaDTO> peopleToProcess = people != null ? people : Collections.emptyList();
 
         try {
             logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", maxThreads);
-            logger.debug("📥 Received {} people to process", people != null ? people.size() : 0);
+            logger.debug("📥 Received {} people to process", peopleToProcess.size());
 
             // Phase 1: Santiago tribunals
-            List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(people);
+            List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(peopleToProcess);
             logger.debug("🧭 Phase 1 candidate count: {}", phase1People.size());
             
             if (!phase1People.isEmpty()) {
                 logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
                 for (PersonaDTO person : phase1People) {
+                    PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
                     logger.debug("👤 [PHASE 1] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                    List<ResultDTO> personResults = processPersonWithThreadPool(person, phase1Scraper, "PHASE 1");
+                    List<ResultDTO> personResults = processPersonWithThreadPool(
+                            person,
+                            phase1Scraper,
+                            "PHASE 1",
+                            "PHASE_1",
+                            requestId,
+                            personaProcesada.getId());
                     allResults.addAll(personResults);
                     logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
 
                     try {
-                        logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
-                            person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                        
-                        personaProcesadaPersistenceService.markTribunalPrincipalAsProcessed(
-                            personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
-                        
-                        logger.info("✅ Person marked as processed in tracking table (tribunal_principal_procesado=true)");
+                        if (tribunalBusquedaService.puedeMarcarComoProcessada(personaProcesada.getId(), requestId, "PHASE_1")) {
+                            logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
+                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+
+                            personaProcesadaPersistenceService.markTribunalPrincipalAsProcessed(personaProcesada);
+
+                            logger.info("✅ Person marked as processed in tracking table (tribunal_principal_procesado=true)");
+                        } else {
+                            logger.warn("⚠️ Person NOT marked after Phase 1 because some tribunals ended with scraper/connection errors or remained pending: {} {} {}",
+                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                        }
                     } catch (Exception e) {
-                        logger.error("❌ Error marking person as processed: {}", e.getMessage());
+                        logger.error("❌ Error evaluating person completion after Phase 1: {}", e.getMessage(), e);
                     }
                 }
                 logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
@@ -97,28 +115,39 @@ public class ScraperOrchestrator {
 
             if (isAllRegionEnabled) {
                 // Phase 2: Other tribunals
-                List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(people);
+                List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(peopleToProcess);
                 logger.debug("🧭 Phase 2 candidate count: {}", phase2People.size());
 
                 if (!phase2People.isEmpty()) {
                     logger.info("▶️  PHASE 2: Processing other tribunals...");
                     for (PersonaDTO person : phase2People) {
+                        PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
                         logger.debug("👤 [PHASE 2] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                        List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
+                        List<ResultDTO> personResults = processPersonWithThreadPool(
+                                person,
+                                phase2Scraper,
+                                "PHASE 2",
+                                "PHASE_2",
+                                requestId,
+                                personaProcesada.getId());
                         allResults.addAll(personResults);
                         logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
 
                         // Mark person as fully processed only when Phase 2 is executed
                         try {
-                            logger.info("📝 Marking person as completely processed after Phase 2: {} {} {}",
-                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                            if (tribunalBusquedaService.puedeMarcarComoProcessada(personaProcesada.getId(), requestId, "PHASE_2")) {
+                                logger.info("📝 Marking person as completely processed after Phase 2: {} {} {}",
+                                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
 
-                            personaProcesadaPersistenceService.markAsProcessed(
-                                personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
+                                personaProcesadaPersistenceService.markAsProcessed(personaProcesada);
 
-                            logger.info("✅ Person marked as completely processed in tracking table (procesado=true)");
+                                logger.info("✅ Person marked as completely processed in tracking table (procesado=true)");
+                            } else {
+                                logger.warn("⚠️ Person NOT marked as completely processed after Phase 2 because some tribunals ended with scraper/connection errors or remained pending: {} {} {}",
+                                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                            }
                         } catch (Exception e) {
-                            logger.error("❌ Error marking person as processed: {}", e.getMessage());
+                            logger.error("❌ Error evaluating person completion after Phase 2: {}", e.getMessage(), e);
                         }
                     }
                     logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
@@ -146,7 +175,13 @@ public class ScraperOrchestrator {
      * @param phaseName Phase name for logging
      * @return List of results for this person
      */
-    private List<ResultDTO> processPersonWithThreadPool(PersonaDTO person, Phase phase, String phaseName) {
+    private List<ResultDTO> processPersonWithThreadPool(
+            PersonaDTO person,
+            Phase phase,
+            String phaseName,
+            String phaseCode,
+            String requestId,
+            Integer personaProcesadaId) {
         List<ResultDTO> personResults = Collections.synchronizedList(new ArrayList<>());
         ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
         List<Future<Void>> futures = new ArrayList<>();
@@ -202,7 +237,8 @@ public class ScraperOrchestrator {
                                     person,
                                     currentYear,
                                     currentYear,
-                                    resumeFromTribunalPosition);
+                                    resumeFromTribunalPosition,
+                                    new TribunalTrackingContext(personaProcesadaId, requestId, phaseCode));
                             personResults.addAll(yearResults);
                             
                             logger.info("   ✅ [{}] Year {} completed. Found {} results",
