@@ -4,6 +4,7 @@ import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.service.AsyncProcessingService;
 import com.example.veritusbot.service.ExcelService;
 import com.example.veritusbot.service.ProcessingStateManager;
+import com.example.veritusbot.service.SearchRuntimeConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,9 @@ public class BusquedaController {
     @Autowired
     private ProcessingStateManager processingStateManager;
 
+    @Autowired
+    private SearchRuntimeConfigService searchRuntimeConfigService;
+
     /**
      * Endpoint to search for people asynchronously
      * POST /api/buscar-personas?archivo=personas.csv&isAllRegionEnabled=true&isSantiagoEnabled=true
@@ -51,6 +55,7 @@ public class BusquedaController {
             System.out.println("║  File: " + archivo);
             System.out.println("║  All Region Enabled: " + isAllRegionEnabled);
             System.out.println("║  Santiago Enabled: " + isSantiagoEnabled);
+            System.out.println("║  Threads per Person (runtime): " + searchRuntimeConfigService.getThreadsPerPerson());
             System.out.println("╚════════════════════════════════════════════════════════════╝\n");
 
             // Check if system is busy
@@ -82,8 +87,10 @@ public class BusquedaController {
 
             System.out.println("📊 Loaded " + people.size() + " people from " + archivo);
 
+            int threadsPerPerson = searchRuntimeConfigService.getThreadsPerPerson();
+
             // Launch async processing
-            asyncProcessingService.processSearchAsync(people, requestId, isAllRegionEnabled, isSantiagoEnabled);
+            asyncProcessingService.processSearchAsync(people, requestId, isAllRegionEnabled, isSantiagoEnabled, threadsPerPerson);
 
             // Return 202 Accepted immediately
             Map<String, Object> response = new HashMap<>();
@@ -93,6 +100,7 @@ public class BusquedaController {
             response.put("peopleCount", people.size());
             response.put("isAllRegionEnabled", isAllRegionEnabled);
             response.put("isSantiagoEnabled", isSantiagoEnabled);
+            response.put("threadsPerPerson", threadsPerPerson);
             response.put("processingMessage", "Search is being processed in the background");
 
             System.out.println("✅ Request accepted: " + requestId);

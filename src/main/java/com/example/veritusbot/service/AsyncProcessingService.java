@@ -40,7 +40,8 @@ public class AsyncProcessingService {
             List<PersonaDTO> people,
             String requestId,
             boolean isAllRegionEnabled,
-            boolean isSantiagoEnabled) {
+            boolean isSantiagoEnabled,
+            int threadsPerPerson) {
         String firstPersonName = !people.isEmpty() ? people.get(0).getNombres() : "Unknown";
 
         // Try to acquire lock
@@ -54,13 +55,15 @@ public class AsyncProcessingService {
             logger.info("📋 Processing {} people", people.size());
             logger.info("🧭 All-region search enabled: {}", isAllRegionEnabled);
             logger.info("🏛️ Santiago search enabled: {}", isSantiagoEnabled);
+            logger.info("🧵 Threads per person (runtime): {}", threadsPerPerson);
 
             // Execute scraping in background
             List<ResultDTO> results = scraperOrchestrator.scrapePeople(
                     people,
                     isAllRegionEnabled,
                     isSantiagoEnabled,
-                    requestId);
+                    requestId,
+                    threadsPerPerson);
 
             logger.info("✅ Async processing completed for request: {}", requestId);
             logger.info("📊 Found {} results", results.size());

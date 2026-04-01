@@ -6,6 +6,7 @@ import com.example.veritusbot.model.PersonaProcesada;
 import com.example.veritusbot.service.PersonProcessingService;
 import com.example.veritusbot.service.PersonaProcesadaPersistenceService;
 import com.example.veritusbot.service.ProcessingStateManager;
+import com.example.veritusbot.service.ProxiSettingService;
 import com.example.veritusbot.service.TribunalBusquedaService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase;
@@ -14,6 +15,7 @@ import com.example.veritusbot.service.scraper.phases.Phase2Scraper;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.*;
@@ -25,35 +27,54 @@ import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
 public class ScraperOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(ScraperOrchestrator.class);
 
-    @Value("${app.scraper.max-threads:1}")
-    private int maxThreads;
-
     private final BrowserManager browserManager;
     private final Phase1Scraper phase1Scraper;
     private final Phase2Scraper phase2Scraper;
     private final PersonProcessingService personProcessingService;
     private final PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
     private final TribunalBusquedaService tribunalBusquedaService;
+    private final ProxiSettingService proxiSettingService;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
 
+    @Autowired
     public ScraperOrchestrator(BrowserManager browserManager,
                                Phase1Scraper phase1Scraper,
                                Phase2Scraper phase2Scraper,
                                PersonProcessingService personProcessingService,
                                ProcessingStateManager processingStateManager,
                                PersonaProcesadaPersistenceService personaProcesadaPersistenceService,
-                               TribunalBusquedaService tribunalBusquedaService) {
+                               TribunalBusquedaService tribunalBusquedaService,
+                               ProxiSettingService proxiSettingService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
         this.personProcessingService = personProcessingService;
         this.personaProcesadaPersistenceService = personaProcesadaPersistenceService;
         this.tribunalBusquedaService = tribunalBusquedaService;
+        this.proxiSettingService = proxiSettingService;
 
         // Reset state on initialization to prevent leftover state from previous runs
         processingStateManager.resetState();
+    }
+
+    // Constructor auxiliar para tests unitarios existentes
+    ScraperOrchestrator(BrowserManager browserManager,
+                        Phase1Scraper phase1Scraper,
+                        Phase2Scraper phase2Scraper,
+                        PersonProcessingService personProcessingService,
+                        ProcessingStateManager processingStateManager,
+                        PersonaProcesadaPersistenceService personaProcesadaPersistenceService,
+                        TribunalBusquedaService tribunalBusquedaService) {
+        this(browserManager,
+                phase1Scraper,
+                phase2Scraper,
+                personProcessingService,
+                processingStateManager,
+                personaProcesadaPersistenceService,
+                tribunalBusquedaService,
+                null);
     }
 
     /**
@@ -70,12 +91,14 @@ public class ScraperOrchestrator {
             List<PersonaDTO> people,
             boolean isAllRegionEnabled,
             boolean isSantiagoEnabled,
-            String requestId) {
+            String requestId,
+            int threadsPerPerson) {
         List<ResultDTO> allResults = new ArrayList<>();
         List<PersonaDTO> peopleToProcess = people != null ? people : Collections.emptyList();
+        int effectiveMaxThreads = resolveEffectiveMaxThreads(threadsPerPerson);
 
         try {
-            logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", maxThreads);
+            logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", effectiveMaxThreads);
             logger.debug("📥 Received {} people to process", peopleToProcess.size());
 
             if (isSantiagoEnabled) {
@@ -94,7 +117,8 @@ public class ScraperOrchestrator {
                                 "PHASE 1",
                                 "PHASE_1",
                                 requestId,
-                                personaProcesada.getId());
+                                personaProcesada.getId(),
+                                effectiveMaxThreads);
                         allResults.addAll(personResults);
                         logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
 
@@ -138,7 +162,8 @@ public class ScraperOrchestrator {
                                 "PHASE 2",
                                 "PHASE_2",
                                 requestId,
-                                personaProcesada.getId());
+                                personaProcesada.getId(),
+                                effectiveMaxThreads);
                         allResults.addAll(personResults);
                         logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
 
@@ -178,7 +203,7 @@ public class ScraperOrchestrator {
 
     /**
      * Process a single person with threading for their year range
-     * Maximum 3 threads (browsers) for the year range
+     * Maximum threads are capped by active proxies in DB (1 proxy = 1 max thread)
      * @param person Person to process
      * @param phase Phase to execute
      * @param phaseName Phase name for logging
@@ -190,9 +215,10 @@ public class ScraperOrchestrator {
             String phaseName,
             String phaseCode,
             String requestId,
-            Integer personaProcesadaId) {
+            Integer personaProcesadaId,
+            int effectiveMaxThreads) {
         List<ResultDTO> personResults = Collections.synchronizedList(new ArrayList<>());
-        ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
+        ExecutorService executor = Executors.newFixedThreadPool(effectiveMaxThreads);
         List<Future<Void>> futures = new ArrayList<>();
 
         try {
@@ -206,7 +232,7 @@ public class ScraperOrchestrator {
 
             int totalYears = person.getAnioFin() - person.getAnioInit() + 1;
             String clientKey = buildClientKey(person);
-            logger.info("   📅 Total years: {}, Max threads: {}", totalYears, maxThreads);
+            logger.info("   📅 Total years: {}, Max threads: {}", totalYears, effectiveMaxThreads);
 
             // Submit a task for each year
             for (int year = person.getAnioInit(); year <= person.getAnioFin(); year++) {
@@ -398,6 +424,30 @@ public class ScraperOrchestrator {
                 normalizeSegment(person.getNombres()),
                 normalizeSegment(person.getApellidoPaterno()),
                 normalizeSegment(person.getApellidoMaterno()));
+    }
+
+    private int resolveEffectiveMaxThreads(int requestedThreadsPerPerson) {
+        if (proxiSettingService == null) {
+            return Math.max(1, requestedThreadsPerPerson);
+        }
+
+        if (requestedThreadsPerPerson < 1) {
+            throw new IllegalArgumentException("threadsPerPerson debe ser mayor o igual a 1");
+        }
+
+        int activeProxyCount = proxiSettingService.listarActivos().size();
+        if (activeProxyCount <= 0) {
+            throw new IllegalStateException("No hay proxies activos en DB. Configura al menos 1 proxy activo para ejecutar búsquedas con hilos.");
+        }
+
+        if (requestedThreadsPerPerson > activeProxyCount) {
+            logger.warn("⚠️ threadsPerPerson={} excede proxies activos={}. Se aplicará el límite de {} hilo(s).",
+                    requestedThreadsPerPerson,
+                    activeProxyCount,
+                    activeProxyCount);
+        }
+
+        return Math.min(requestedThreadsPerPerson, activeProxyCount);
     }
 
     private String normalizeSegment(String value) {
