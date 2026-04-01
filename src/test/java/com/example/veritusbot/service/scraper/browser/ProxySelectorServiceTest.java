@@ -1,29 +1,40 @@
 package com.example.veritusbot.service.scraper.browser;
 
+import com.example.veritusbot.model.ProxiSetting;
+import com.example.veritusbot.service.ProxiSettingService;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class ProxySelectorServiceTest {
+
+    @Mock
+    private ProxiSettingService proxiSettingService;
+
+    @InjectMocks
+    private ProxySelectorService service;
 
     @Test
     void pickNextProxyOrNullShouldReturnNullWhenNoProxyConfigured() {
-        ProxySelectorService service = new ProxySelectorService();
+        when(proxiSettingService.listarActivos()).thenReturn(List.of());
 
         assertNull(service.pickNextProxyOrNull());
     }
 
     @Test
     void pickNextProxyOrNullShouldReturnConfiguredProxiesInSequenceAndWrapAround() {
-        ProxySelectorService service = new ProxySelectorService();
-        ReflectionTestUtils.setField(service, "proxi1", "http://10.0.0.1:8080");
-        ReflectionTestUtils.setField(service, "userProxi1", "user1");
-        ReflectionTestUtils.setField(service, "passProxi1", "pass1");
-        ReflectionTestUtils.setField(service, "proxi2", "http://10.0.0.2:8080");
-        ReflectionTestUtils.setField(service, "userProxi2", "user2");
-        ReflectionTestUtils.setField(service, "passProxi2", "pass2");
-        ReflectionTestUtils.setField(service, "proxi3", " ");
+        ProxiSetting proxy1 = new ProxiSetting("http://10.0.0.1:8080", "user1", "pass1", true, 1);
+        ProxiSetting proxy2 = new ProxiSetting("http://10.0.0.2:8080", "user2", "pass2", true, 2);
+
+        when(proxiSettingService.listarActivos()).thenReturn(List.of(proxy1, proxy2));
 
         ProxySelectorService.ProxyConfig first = service.pickNextProxyOrNull();
         ProxySelectorService.ProxyConfig second = service.pickNextProxyOrNull();
@@ -42,5 +53,18 @@ class ProxySelectorServiceTest {
         assertEquals("user1", third.username());
         assertEquals("pass1", third.password());
     }
-}
 
+    @Test
+    void pickNextProxyOrNullShouldReturnNullCredentialsWhenBlank() {
+        ProxiSetting proxyWithoutAuth = new ProxiSetting("http://10.0.0.3:8080", "  ", null, true, 1);
+
+        when(proxiSettingService.listarActivos()).thenReturn(List.of(proxyWithoutAuth));
+
+        ProxySelectorService.ProxyConfig result = service.pickNextProxyOrNull();
+
+        assertNotNull(result);
+        assertEquals("http://10.0.0.3:8080", result.server());
+        assertNull(result.username());
+        assertNull(result.password());
+    }
+}

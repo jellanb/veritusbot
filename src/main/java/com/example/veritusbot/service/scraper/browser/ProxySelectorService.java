@@ -1,11 +1,11 @@
 package com.example.veritusbot.service.scraper.browser;
 
+import com.example.veritusbot.model.ProxiSetting;
+import com.example.veritusbot.service.ProxiSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -14,96 +14,42 @@ public class ProxySelectorService {
     private static final Logger logger = LoggerFactory.getLogger(ProxySelectorService.class);
 
     private final AtomicInteger nextProxyIndex = new AtomicInteger(0);
+    private final ProxiSettingService proxiSettingService;
 
     public record ProxyConfig(String server, String username, String password) {
     }
 
-    @Value("${proxi1:}")
-    private String proxi1;
-    @Value("${userProxi1:}")
-    private String userProxi1;
-    @Value("${passProxi1:}")
-    private String passProxi1;
-
-    @Value("${proxi2:}")
-    private String proxi2;
-    @Value("${userProxi2:}")
-    private String userProxi2;
-    @Value("${passProxi2:}")
-    private String passProxi2;
-
-    @Value("${proxi3:}")
-    private String proxi3;
-    @Value("${userProxi3:}")
-    private String userProxi3;
-    @Value("${passProxi3:}")
-    private String passProxi3;
-
-    @Value("${proxi4:}")
-    private String proxi4;
-    @Value("${userProxi4:}")
-    private String userProxi4;
-    @Value("${passProxi4:}")
-    private String passProxi4;
-
-    @Value("${proxi5:}")
-    private String proxi5;
-    @Value("${userProxi5:}")
-    private String userProxi5;
-    @Value("${passProxi5:}")
-    private String passProxi5;
-
-    @Value("${proxi6:}")
-    private String proxi6;
-    @Value("${userProxi6:}")
-    private String userProxi6;
-    @Value("${passProxi6:}")
-    private String passProxi6;
+    public ProxySelectorService(ProxiSettingService proxiSettingService) {
+        this.proxiSettingService = proxiSettingService;
+    }
 
     public ProxyConfig pickNextProxyOrNull() {
-        List<ProxyConfig> configuredProxies = getConfiguredProxies();
-        logger.debug("🌍 Configured proxies available: {}", configuredProxies.size());
+        List<ProxiSetting> activos = proxiSettingService.listarActivos();
+        logger.debug("🌍 Configured proxies available: {}", activos.size());
 
-        if (configuredProxies.isEmpty()) {
+        if (activos.isEmpty()) {
             logger.debug("🌍 No proxy selected because configuration is empty");
             return null;
         }
 
-        int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), configuredProxies.size());
-        ProxyConfig selected = configuredProxies.get(selectedIndex);
-        logger.debug("🌍 Selected proxy index {} -> {}", selectedIndex, selected.server());
-        return selected;
+        int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), activos.size());
+        ProxiSetting selected = activos.get(selectedIndex);
+        logger.debug("🌍 Selected proxy index {} -> {}", selectedIndex, selected.getServer());
+        return toProxyConfig(selected);
     }
 
-    private List<ProxyConfig> getConfiguredProxies() {
-        List<ProxyConfig> configuredProxies = new ArrayList<>(6);
-        addIfPresent(configuredProxies, proxi1, userProxi1, passProxi1);
-        addIfPresent(configuredProxies, proxi2, userProxi2, passProxi2);
-        addIfPresent(configuredProxies, proxi3, userProxi3, passProxi3);
-        addIfPresent(configuredProxies, proxi4, userProxi4, passProxi4);
-        addIfPresent(configuredProxies, proxi5, userProxi5, passProxi5);
-        addIfPresent(configuredProxies, proxi6, userProxi6, passProxi6);
-        return configuredProxies;
-    }
-
-    private void addIfPresent(List<ProxyConfig> proxies, String server, String username, String password) {
-        if (server == null || server.isBlank()) {
-            return;
-        }
-
-        String normalizedServer = server.trim();
-        String normalizedUser = normalizeCredentialsValue(username);
-        String normalizedPass = normalizeCredentialsValue(password);
-
-        proxies.add(new ProxyConfig(normalizedServer, normalizedUser, normalizedPass));
+    private ProxyConfig toProxyConfig(ProxiSetting setting) {
+        String normalizedServer = setting.getServer().trim();
+        String normalizedUser = normalizeCredential(setting.getUsername());
+        String normalizedPass = normalizeCredential(setting.getPassword());
         logger.debug("🌍 Registered proxy {} (auth={})", normalizedServer, normalizedUser != null);
+        return new ProxyConfig(normalizedServer, normalizedUser, normalizedPass);
     }
 
-    private String normalizeCredentialsValue(String value) {
+    private String normalizeCredential(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return value.trim();
     }
 }
-
