@@ -2,10 +2,12 @@ package com.example.veritusbot.service.scraper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +28,7 @@ import com.example.veritusbot.model.PersonaProcesada;
 import com.example.veritusbot.service.PersonProcessingService;
 import com.example.veritusbot.service.PersonaProcesadaPersistenceService;
 import com.example.veritusbot.service.ProcessingStateManager;
+import com.example.veritusbot.service.TribunalBusquedaService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.phases.Phase1Scraper;
 import com.example.veritusbot.service.scraper.phases.Phase2Scraper;
@@ -54,6 +57,9 @@ class ScraperOrchestratorTest {
     private PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
 
     @Mock
+    private TribunalBusquedaService tribunalBusquedaService;
+
+    @Mock
     private Page page;
 
     private ScraperOrchestrator orchestrator;
@@ -66,7 +72,8 @@ class ScraperOrchestratorTest {
                 phase2Scraper,
                 personProcessingService,
                 processingStateManager,
-                personaProcesadaPersistenceService);
+                personaProcesadaPersistenceService,
+                tribunalBusquedaService);
 
         ReflectionTestUtils.setField(orchestrator, "maxThreads", 1);
         ReflectionTestUtils.setField(orchestrator, "pjudUrl", "https://example.test/pjud");
@@ -92,20 +99,22 @@ class ScraperOrchestratorTest {
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of(phase2Person));
         when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-TEST"), eq("PHASE_1"))).thenReturn(true);
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-TEST"), eq("PHASE_2"))).thenReturn(true);
 
-        when(phase1Scraper.execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0)))
+        when(phase1Scraper.execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0), any(TribunalTrackingContext.class)))
                 .thenReturn(List.of(phase1Result));
-        when(phase2Scraper.execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0)))
+        when(phase2Scraper.execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0), any(TribunalTrackingContext.class)))
                 .thenReturn(List.of(phase2Result));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase1Person)).thenReturn(phase1Tracking);
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase2Person)).thenReturn(phase2Tracking);
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person), true, true, "REQ-TEST");
 
         assertEquals(2, results.size());
-        verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0));
-        verify(phase2Scraper, times(1)).execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0));
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0), any(TribunalTrackingContext.class));
+        verify(phase2Scraper, times(1)).execute(eq(page), eq(phase2Person), eq(2021), eq(2021), eq(0), any(TribunalTrackingContext.class));
 
         verify(personaProcesadaPersistenceService, times(1))
                 .markTribunalPrincipalAsProcessed(phase1Tracking);
@@ -125,22 +134,23 @@ class ScraperOrchestratorTest {
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
         when(browserManager.launchBrowser(anyString())).thenReturn(firstAttemptPage, secondAttemptPage);
         doNothing().when(browserManager).navigateTo(any(Page.class), any());
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-TEST"), eq("PHASE_1"))).thenReturn(true);
 
-        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0)))
+        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0), any(TribunalTrackingContext.class)))
                 .thenThrow(new RetryableScraperException("retry", null, true, "year: 2022", 3));
-        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3)))
+        when(phase1Scraper.execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3), any(TribunalTrackingContext.class)))
                 .thenReturn(List.of(retriedResult));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST");
 
         assertEquals(1, results.size());
         verify(browserManager, times(2)).launchBrowser(anyString());
         verify(browserManager, times(2)).navigateTo(any(Page.class), eq("https://example.test/pjud"));
         InOrder inOrder = inOrder(phase1Scraper);
-        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0));
-        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3));
+        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(0), any(TribunalTrackingContext.class));
+        inOrder.verify(phase1Scraper).execute(any(Page.class), eq(person), eq(2022), eq(2022), eq(3), any(TribunalTrackingContext.class));
         verify(browserManager, times(1)).closeBrowser(firstAttemptPage);
         verify(browserManager, times(1)).closeBrowser(secondAttemptPage);
     }
@@ -153,18 +163,75 @@ class ScraperOrchestratorTest {
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
         when(browserManager.launchBrowser(anyString())).thenReturn(page);
         doNothing().when(browserManager).navigateTo(eq(page), any());
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-TEST"), eq("PHASE_1"))).thenReturn(false);
 
-        when(phase1Scraper.execute(eq(page), eq(person), eq(2023), eq(2023), eq(0)))
+        when(phase1Scraper.execute(eq(page), eq(person), eq(2023), eq(2023), eq(0), any(TribunalTrackingContext.class)))
                 .thenThrow(new RetryableScraperException("fatal", null, false, "year: 2023"));
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST");
 
         assertEquals(0, results.size());
         verify(browserManager, times(1)).launchBrowser(anyString());
-        verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2023), eq(2023), eq(0));
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2023), eq(2023), eq(0), any(TribunalTrackingContext.class));
         verify(browserManager, times(1)).closeBrowser(page);
+        verify(personaProcesadaPersistenceService, never()).markTribunalPrincipalAsProcessed(any(PersonaProcesada.class));
+    }
+
+    @Test
+    void scrapePeopleShouldSkipPhase2WhenAllRegionIsDisabled() throws Exception {
+        PersonaDTO person = new PersonaDTO("Eva", "Nunez", "Mora", 2024, 2024);
+        ResultDTO phase1Result = new ResultDTO("Eva Nunez Mora", "Tribunal A", 2024, "OK", "detalle");
+
+        when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
+        when(browserManager.launchBrowser(anyString())).thenReturn(page);
+        doNothing().when(browserManager).navigateTo(eq(page), any());
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-TEST"), eq("PHASE_1"))).thenReturn(true);
+        when(phase1Scraper.execute(eq(page), eq(person), eq(2024), eq(2024), eq(0), any(TribunalTrackingContext.class)))
+                .thenReturn(List.of(phase1Result));
+        when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
+
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), false, true, "REQ-TEST");
+
+        assertEquals(1, results.size());
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2024), eq(2024), eq(0), any(TribunalTrackingContext.class));
+        verify(personProcessingService, never()).filterPeopleForPhase2(any());
+        verify(phase2Scraper, never()).execute(any(Page.class), any(), anyInt(), anyInt(), anyInt(), any(TribunalTrackingContext.class));
+        verify(personaProcesadaPersistenceService, never()).markAsProcessed(any(PersonaProcesada.class));
+    }
+
+    @Test
+    void scrapePeopleShouldNotMarkWhenTrackingValidationFails() throws Exception {
+        PersonaDTO person = new PersonaDTO("Nora", "Perez", "Mena", 2024, 2024);
+        ResultDTO phase1Result = new ResultDTO("Nora Perez Mena", "Tribunal A", 2024, "OK", "detalle");
+
+        when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
+        when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
+        when(browserManager.launchBrowser(anyString())).thenReturn(page);
+        doNothing().when(browserManager).navigateTo(eq(page), any());
+        when(phase1Scraper.execute(eq(page), eq(person), eq(2024), eq(2024), eq(0), any(TribunalTrackingContext.class)))
+                .thenReturn(List.of(phase1Result));
+        when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
+        when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-FAIL"), eq("PHASE_1"))).thenReturn(false);
+
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-FAIL");
+
+        assertEquals(1, results.size());
+        verify(personaProcesadaPersistenceService, never()).markTribunalPrincipalAsProcessed(any(PersonaProcesada.class));
+    }
+
+    @Test
+    void scrapePeopleShouldSkipPhase1WhenSantiagoIsDisabled() throws Exception {
+        PersonaDTO person = new PersonaDTO("Pia", "Lopez", "Rios", 2024, 2024);
+
+        when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
+
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, false, "REQ-NO-SCL");
+
+        assertEquals(0, results.size());
+        verify(personProcessingService, never()).filterPeopleForPhase1(any());
+        verify(phase1Scraper, never()).execute(any(Page.class), any(), anyInt(), anyInt(), anyInt(), any(TribunalTrackingContext.class));
     }
 }
 

@@ -3,12 +3,14 @@ package com.example.veritusbot.service.scraper.phases;
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.dto.ResultDTO;
 import com.example.veritusbot.service.ResultPersistenceService;
+import com.example.veritusbot.service.TribunalBusquedaService;
 import com.example.veritusbot.service.scraper.browser.BrowserManager;
 import com.example.veritusbot.service.scraper.browser.FrameNavigator;
 import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
 import com.example.veritusbot.service.scraper.form.FormFiller;
 import com.example.veritusbot.service.scraper.form.TribunalSelector;
 import com.example.veritusbot.service.scraper.parser.ResultParser;
+import com.example.veritusbot.service.scraper.TribunalTrackingContext;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
@@ -32,12 +34,14 @@ public class Phase1Scraper implements Phase {
     private final ResultPersistenceService resultPersistenceService;
     private final HumanBehaviorService humanBehaviorService;
     private final BrowserManager browserManager;
+    private final TribunalBusquedaService tribunalBusquedaService;
 
     public Phase1Scraper(FormFiller formFiller, TribunalSelector tribunalSelector,
                          ResultParser resultParser, FrameNavigator frameNavigator,
                          ResultPersistenceService resultPersistenceService,
                          HumanBehaviorService humanBehaviorService,
-                         BrowserManager browserManager) {
+                         BrowserManager browserManager,
+                         TribunalBusquedaService tribunalBusquedaService) {
         this.formFiller = formFiller;
         this.tribunalSelector = tribunalSelector;
         this.resultParser = resultParser;
@@ -45,11 +49,23 @@ public class Phase1Scraper implements Phase {
         this.resultPersistenceService = resultPersistenceService;
         this.humanBehaviorService = humanBehaviorService;
         this.browserManager = browserManager;
+        this.tribunalBusquedaService = tribunalBusquedaService;
     }
 
     @Override
     public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear, int startTribunalPosition)
             throws RetryableScraperException {
+        return execute(page, person, startYear, endYear, startTribunalPosition, null);
+    }
+
+    @Override
+    public List<ResultDTO> execute(
+            Page page,
+            PersonaDTO person,
+            int startYear,
+            int endYear,
+            int startTribunalPosition,
+            TribunalTrackingContext trackingContext) throws RetryableScraperException {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
@@ -92,6 +108,7 @@ public class Phase1Scraper implements Phase {
 
             // Filter to only Santiago tribunals (1-30)
             List<Map.Entry<String, Integer>> santiagoTribunals = filterSantiagoTribunals(allTribunals);
+            registerTribunalsIfNeeded(santiagoTribunals, startYear, trackingContext);
 
             if (santiagoTribunals.isEmpty()) {
                 logger.warn("⚠ No Santiago tribunals found");
@@ -117,6 +134,8 @@ public class Phase1Scraper implements Phase {
                 try {
                     Integer tribunalIndex = tribunalEntry.getValue();
                     if (tribunalIndex == null) {
+                        markTribunalWithError(trackingContext, tribunalName, startYear,
+                                "ERROR_SCRAPER: tribunal index is null");
                         logger.debug("⏭️  Skipping tribunal {} because index is null", tribunalName);
                         continue;
                     }
@@ -154,6 +173,8 @@ public class Phase1Scraper implements Phase {
                         logger.debug("ℹ️  No results in tribunal {} for year {}", tribunalName, startYear);
                     }
 
+                    markTribunalCompleted(trackingContext, tribunalName, startYear);
+
                 } catch (Exception e) {
                     // ✅ Throw exception with context for ScraperOrchestrator to handle retries
                     String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -162,6 +183,8 @@ public class Phase1Scraper implements Phase {
                     // If it's a browser/network error, let ScraperOrchestrator know to retry
                     // Otherwise, log and continue to next tribunal
                     if (RetryableScraperException.isBrowserOrNetworkError(e)) {
+                        markTribunalWithError(trackingContext, tribunalName, startYear,
+                                "ERROR_CONEXION: " + errorMsg);
                         throw new com.example.veritusbot.service.scraper.retry.RetryableScraperException(
                             "Browser/Network error while searching tribunal: " + tribunalName,
                             e,
@@ -170,6 +193,8 @@ public class Phase1Scraper implements Phase {
                             tribunalPosition
                         );
                     } else {
+                        markTribunalWithError(trackingContext, tribunalName, startYear,
+                                "ERROR_SCRAPER: " + errorMsg);
                         logger.warn("⚠ Non-retryable error in tribunal {}, continuing to next...", tribunalName);
                     }
                 }
@@ -199,6 +224,66 @@ public class Phase1Scraper implements Phase {
         santiago.sort(Comparator.comparingInt(entry -> entry.getValue() != null ? entry.getValue() : Integer.MAX_VALUE));
         logger.debug("🧮 Santiago tribunal filter reduced {} -> {} entries", allTribunals.size(), santiago.size());
         return santiago;
+    }
+
+    private void registerTribunalsIfNeeded(
+            List<Map.Entry<String, Integer>> tribunals,
+            int year,
+            TribunalTrackingContext trackingContext) {
+        if (trackingContext == null || tribunals.isEmpty()) {
+            return;
+        }
+
+        List<String> tribunalNames = tribunals.stream()
+                .map(Map.Entry::getKey)
+                .toList();
+
+        Map<String, Integer> tribunalIndexMap = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> tribunal : tribunals) {
+            tribunalIndexMap.put(tribunal.getKey(), tribunal.getValue());
+        }
+
+        tribunalBusquedaService.registrarTribunalesAProcesar(
+                trackingContext.personaProcesadaId(),
+                trackingContext.requestId(),
+                year,
+                trackingContext.faseCodigo(),
+                tribunalNames,
+                tribunalIndexMap);
+    }
+
+    private void markTribunalCompleted(TribunalTrackingContext trackingContext, String tribunalName, int year) {
+        if (trackingContext == null) {
+            return;
+        }
+
+        tribunalBusquedaService.marcarTribunalCompletado(
+                trackingContext.personaProcesadaId(),
+                trackingContext.requestId(),
+                tribunalName,
+                trackingContext.faseCodigo(),
+                year,
+                true,
+                null);
+    }
+
+    private void markTribunalWithError(
+            TribunalTrackingContext trackingContext,
+            String tribunalName,
+            int year,
+            String motivoError) {
+        if (trackingContext == null) {
+            return;
+        }
+
+        tribunalBusquedaService.marcarTribunalCompletado(
+                trackingContext.personaProcesadaId(),
+                trackingContext.requestId(),
+                tribunalName,
+                trackingContext.faseCodigo(),
+                year,
+                false,
+                motivoError);
     }
 
 

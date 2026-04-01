@@ -30,7 +30,7 @@ public class BusquedaController {
 
     /**
      * Endpoint to search for people asynchronously
-     * POST /api/buscar-personas?archivo=personas.csv
+     * POST /api/buscar-personas?archivo=personas.csv&isAllRegionEnabled=true&isSantiagoEnabled=true
      * 
      * Returns:
      * - 202 Accepted if request accepted and processing started
@@ -38,7 +38,9 @@ public class BusquedaController {
      */
     @PostMapping("/api/buscar-personas")
     public ResponseEntity<?> searchPeople(
-            @RequestParam(value = "archivo", defaultValue = "personas.csv") String archivo) {
+            @RequestParam(value = "archivo", defaultValue = "personas.csv") String archivo,
+            @RequestParam(value = "isAllRegionEnabled", defaultValue = "true") boolean isAllRegionEnabled,
+            @RequestParam(value = "isSantiagoEnabled", defaultValue = "true") boolean isSantiagoEnabled) {
 
         try {
             // Log request
@@ -47,6 +49,8 @@ public class BusquedaController {
             System.out.println("║  SEARCH REQUEST RECEIVED                                     ║");
             System.out.println("║  Request ID: " + requestId);
             System.out.println("║  File: " + archivo);
+            System.out.println("║  All Region Enabled: " + isAllRegionEnabled);
+            System.out.println("║  Santiago Enabled: " + isSantiagoEnabled);
             System.out.println("╚════════════════════════════════════════════════════════════╝\n");
 
             // Check if system is busy
@@ -79,7 +83,7 @@ public class BusquedaController {
             System.out.println("📊 Loaded " + people.size() + " people from " + archivo);
 
             // Launch async processing
-            asyncProcessingService.processSearchAsync(people, requestId);
+            asyncProcessingService.processSearchAsync(people, requestId, isAllRegionEnabled, isSantiagoEnabled);
 
             // Return 202 Accepted immediately
             Map<String, Object> response = new HashMap<>();
@@ -87,6 +91,8 @@ public class BusquedaController {
             response.put("message", "Request accepted and processing started");
             response.put("requestId", requestId);
             response.put("peopleCount", people.size());
+            response.put("isAllRegionEnabled", isAllRegionEnabled);
+            response.put("isSantiagoEnabled", isSantiagoEnabled);
             response.put("processingMessage", "Search is being processed in the background");
 
             System.out.println("✅ Request accepted: " + requestId);
