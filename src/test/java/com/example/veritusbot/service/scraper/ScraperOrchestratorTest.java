@@ -75,7 +75,6 @@ class ScraperOrchestratorTest {
                 personaProcesadaPersistenceService,
                 tribunalBusquedaService);
 
-        ReflectionTestUtils.setField(orchestrator, "maxThreads", 1);
         ReflectionTestUtils.setField(orchestrator, "pjudUrl", "https://example.test/pjud");
     }
 
@@ -110,7 +109,7 @@ class ScraperOrchestratorTest {
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase1Person)).thenReturn(phase1Tracking);
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase2Person)).thenReturn(phase2Tracking);
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person), true, true, "REQ-TEST");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person), true, true, "REQ-TEST", 1);
 
         assertEquals(2, results.size());
         verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0), any(TribunalTrackingContext.class));
@@ -143,7 +142,7 @@ class ScraperOrchestratorTest {
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST", 1);
 
         assertEquals(1, results.size());
         verify(browserManager, times(2)).launchBrowser(anyString());
@@ -170,7 +169,7 @@ class ScraperOrchestratorTest {
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-TEST", 1);
 
         assertEquals(0, results.size());
         verify(browserManager, times(1)).launchBrowser(anyString());
@@ -192,7 +191,7 @@ class ScraperOrchestratorTest {
                 .thenReturn(List.of(phase1Result));
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), false, true, "REQ-TEST");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), false, true, "REQ-TEST", 1);
 
         assertEquals(1, results.size());
         verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2024), eq(2024), eq(0), any(TribunalTrackingContext.class));
@@ -215,7 +214,7 @@ class ScraperOrchestratorTest {
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
         when(tribunalBusquedaService.puedeMarcarComoProcessada(any(), eq("REQ-FAIL"), eq("PHASE_1"))).thenReturn(false);
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-FAIL");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, true, "REQ-FAIL", 1);
 
         assertEquals(1, results.size());
         verify(personaProcesadaPersistenceService, never()).markTribunalPrincipalAsProcessed(any(PersonaProcesada.class));
@@ -227,7 +226,7 @@ class ScraperOrchestratorTest {
 
         when(personProcessingService.filterPeopleForPhase2(any())).thenReturn(List.of());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, false, "REQ-NO-SCL");
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true, false, "REQ-NO-SCL", 1);
 
         assertEquals(0, results.size());
         verify(personProcessingService, never()).filterPeopleForPhase1(any());
