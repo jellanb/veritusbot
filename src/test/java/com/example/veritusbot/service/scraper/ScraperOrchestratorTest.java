@@ -2,10 +2,12 @@ package com.example.veritusbot.service.scraper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -101,7 +103,7 @@ class ScraperOrchestratorTest {
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase1Person)).thenReturn(phase1Tracking);
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(phase2Person)).thenReturn(phase2Tracking);
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(phase1Person, phase2Person), true);
 
         assertEquals(2, results.size());
         verify(phase1Scraper, times(1)).execute(eq(page), eq(phase1Person), eq(2020), eq(2020), eq(0));
@@ -133,7 +135,7 @@ class ScraperOrchestratorTest {
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true);
 
         assertEquals(1, results.size());
         verify(browserManager, times(2)).launchBrowser(anyString());
@@ -159,12 +161,33 @@ class ScraperOrchestratorTest {
 
         when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
 
-        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person));
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), true);
 
         assertEquals(0, results.size());
         verify(browserManager, times(1)).launchBrowser(anyString());
         verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2023), eq(2023), eq(0));
         verify(browserManager, times(1)).closeBrowser(page);
+    }
+
+    @Test
+    void scrapePeopleShouldSkipPhase2WhenAllRegionIsDisabled() throws Exception {
+        PersonaDTO person = new PersonaDTO("Eva", "Nunez", "Mora", 2024, 2024);
+        ResultDTO phase1Result = new ResultDTO("Eva Nunez Mora", "Tribunal A", 2024, "OK", "detalle");
+
+        when(personProcessingService.filterPeopleForPhase1(any())).thenReturn(List.of(person));
+        when(browserManager.launchBrowser(anyString())).thenReturn(page);
+        doNothing().when(browserManager).navigateTo(eq(page), any());
+        when(phase1Scraper.execute(eq(page), eq(person), eq(2024), eq(2024), eq(0)))
+                .thenReturn(List.of(phase1Result));
+        when(personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person)).thenReturn(new PersonaProcesada());
+
+        List<ResultDTO> results = orchestrator.scrapePeople(List.of(person), false);
+
+        assertEquals(1, results.size());
+        verify(phase1Scraper, times(1)).execute(eq(page), eq(person), eq(2024), eq(2024), eq(0));
+        verify(personProcessingService, never()).filterPeopleForPhase2(any());
+        verify(phase2Scraper, never()).execute(any(Page.class), any(), anyInt(), anyInt(), anyInt());
+        verify(personaProcesadaPersistenceService, never()).markAsProcessed(any(PersonaProcesada.class));
     }
 }
 

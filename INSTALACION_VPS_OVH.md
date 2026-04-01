@@ -290,6 +290,32 @@ sudo systemctl restart veritusbot
 sudo journalctl -u veritusbot -f
 ```
 
+### Atajo recomendado (un solo comando)
+
+Si quieres ejecutar todo lo anterior con un comando corto, agrega esta funcion en `~/.bashrc`:
+
+```bash
+cat >> ~/.bashrc <<'EOF'
+vbot_debug() {
+  sudo mkdir -p /etc/systemd/system/veritusbot.service.d
+  sudo tee /etc/systemd/system/veritusbot.service.d/logging.conf > /dev/null <<'EOC'
+[Service]
+Environment="JAVA_TOOL_OPTIONS=-Dlogging.level.root=INFO -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase1Scraper=DEBUG -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase2Scraper=DEBUG"
+EOC
+  sudo systemctl daemon-reload
+  sudo systemctl restart veritusbot
+  sudo journalctl -u veritusbot -f
+}
+EOF
+source ~/.bashrc
+```
+
+Luego solo ejecuta:
+
+```bash
+vbot_debug
+```
+
 Verificar que el override quedo activo:
 
 ```bash
@@ -302,6 +328,20 @@ Opcional: volver a nivel normal
 sudo rm -f /etc/systemd/system/veritusbot.service.d/logging.conf
 sudo systemctl daemon-reload
 sudo systemctl restart veritusbot
+```
+
+Opcional: crear atajo para volver a nivel normal:
+
+```bash
+cat >> ~/.bashrc <<'EOF'
+vbot_normal() {
+  sudo rm -f /etc/systemd/system/veritusbot.service.d/logging.conf
+  sudo systemctl daemon-reload
+  sudo systemctl restart veritusbot
+  sudo journalctl -u veritusbot -f
+}
+EOF
+source ~/.bashrc
 ```
 
 ---

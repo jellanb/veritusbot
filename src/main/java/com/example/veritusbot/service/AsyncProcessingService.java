@@ -32,9 +32,10 @@ public class AsyncProcessingService {
      * 
      * @param people List of people to search
      * @param requestId Unique request identifier
+     * @param isAllRegionEnabled true to include all tribunals (Phase 2), false to skip it
      */
     @Async
-    public void processSearchAsync(List<PersonaDTO> people, String requestId) {
+    public void processSearchAsync(List<PersonaDTO> people, String requestId, boolean isAllRegionEnabled) {
         String firstPersonName = !people.isEmpty() ? people.get(0).getNombres() : "Unknown";
 
         // Try to acquire lock
@@ -46,9 +47,10 @@ public class AsyncProcessingService {
         try {
             logger.info("▶️  Starting async processing for request: {}", requestId);
             logger.info("📋 Processing {} people", people.size());
+            logger.info("🧭 All-region search enabled: {}", isAllRegionEnabled);
 
             // Execute scraping in background
-            List<ResultDTO> results = scraperOrchestrator.scrapePeople(people);
+            List<ResultDTO> results = scraperOrchestrator.scrapePeople(people, isAllRegionEnabled);
 
             logger.info("✅ Async processing completed for request: {}", requestId);
             logger.info("📊 Found {} results", results.size());

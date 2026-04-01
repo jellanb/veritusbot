@@ -56,9 +56,10 @@ public class ScraperOrchestrator {
      * Process one person at a time with threading for their year range
      * Persist results immediately to CSV and database after each person
      * @param people List of PersonaDTO objects to scrape
+     * @param isAllRegionEnabled true to process all tribunals (Phase 2), false to run only Phase 1
      * @return List of ResultDTO with all found results
      */
-    public List<ResultDTO> scrapePeople(List<PersonaDTO> people) {
+    public List<ResultDTO> scrapePeople(List<PersonaDTO> people, boolean isAllRegionEnabled) {
         List<ResultDTO> allResults = new ArrayList<>();
 
         try {
@@ -94,34 +95,38 @@ public class ScraperOrchestrator {
                 logger.info("ℹ️  Phase 1: No people pending");
             }
 
-            // Phase 2: Other tribunals
-            List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(people);
-            logger.debug("🧭 Phase 2 candidate count: {}", phase2People.size());
-            
-            if (!phase2People.isEmpty()) {
-                logger.info("▶️  PHASE 2: Processing other tribunals...");
-                for (PersonaDTO person : phase2People) {
-                    logger.debug("👤 [PHASE 2] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                    List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
-                    allResults.addAll(personResults);
-                    logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
-                    
-                    // ✅ MARK PERSON AS PROCESSED IMMEDIATELY (within the person loop)
-                    try {
-                        logger.info("📝 Marking person as completely processed after Phase 2: {} {} {}",
-                            person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                        
-                        personaProcesadaPersistenceService.markAsProcessed(
-                            personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
-                        
-                        logger.info("✅ Person marked as completely processed in tracking table (procesado=true)");
-                    } catch (Exception e) {
-                        logger.error("❌ Error marking person as processed: {}", e.getMessage());
+            if (isAllRegionEnabled) {
+                // Phase 2: Other tribunals
+                List<PersonaDTO> phase2People = personProcessingService.filterPeopleForPhase2(people);
+                logger.debug("🧭 Phase 2 candidate count: {}", phase2People.size());
+
+                if (!phase2People.isEmpty()) {
+                    logger.info("▶️  PHASE 2: Processing other tribunals...");
+                    for (PersonaDTO person : phase2People) {
+                        logger.debug("👤 [PHASE 2] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                        List<ResultDTO> personResults = processPersonWithThreadPool(person, phase2Scraper, "PHASE 2");
+                        allResults.addAll(personResults);
+                        logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
+
+                        // Mark person as fully processed only when Phase 2 is executed
+                        try {
+                            logger.info("📝 Marking person as completely processed after Phase 2: {} {} {}",
+                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+
+                            personaProcesadaPersistenceService.markAsProcessed(
+                                personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person));
+
+                            logger.info("✅ Person marked as completely processed in tracking table (procesado=true)");
+                        } catch (Exception e) {
+                            logger.error("❌ Error marking person as processed: {}", e.getMessage());
+                        }
                     }
+                    logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
+                } else {
+                    logger.info("ℹ️  Phase 2: No people pending");
                 }
-                logger.info("✅ Phase 2 completed. Total results: {}", allResults.size());
             } else {
-                logger.info("ℹ️  Phase 2: No people pending");
+                logger.info("⏭️  Phase 2 skipped because all-region search is disabled");
             }
 
         } catch (Exception e) {
