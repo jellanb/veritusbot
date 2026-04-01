@@ -62,10 +62,15 @@ public class ScraperOrchestrator {
      * Persist results immediately to CSV and database after each person
      * @param people List of PersonaDTO objects to scrape
      * @param isAllRegionEnabled true to process all tribunals (Phase 2), false to run only Phase 1
+     * @param isSantiagoEnabled true to process Santiago tribunals (Phase 1), false to skip it
      * @param requestId Request ID for tracking
      * @return List of ResultDTO with all found results
      */
-    public List<ResultDTO> scrapePeople(List<PersonaDTO> people, boolean isAllRegionEnabled, String requestId) {
+    public List<ResultDTO> scrapePeople(
+            List<PersonaDTO> people,
+            boolean isAllRegionEnabled,
+            boolean isSantiagoEnabled,
+            String requestId) {
         List<ResultDTO> allResults = new ArrayList<>();
         List<PersonaDTO> peopleToProcess = people != null ? people : Collections.emptyList();
 
@@ -73,44 +78,48 @@ public class ScraperOrchestrator {
             logger.info("🚀 Starting scraper orchestrator with max {} threads per client...", maxThreads);
             logger.debug("📥 Received {} people to process", peopleToProcess.size());
 
-            // Phase 1: Santiago tribunals
-            List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(peopleToProcess);
-            logger.debug("🧭 Phase 1 candidate count: {}", phase1People.size());
-            
-            if (!phase1People.isEmpty()) {
-                logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
-                for (PersonaDTO person : phase1People) {
-                    PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
-                    logger.debug("👤 [PHASE 1] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
-                    List<ResultDTO> personResults = processPersonWithThreadPool(
-                            person,
-                            phase1Scraper,
-                            "PHASE 1",
-                            "PHASE_1",
-                            requestId,
-                            personaProcesada.getId());
-                    allResults.addAll(personResults);
-                    logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
+            if (isSantiagoEnabled) {
+                // Phase 1: Santiago tribunals
+                List<PersonaDTO> phase1People = personProcessingService.filterPeopleForPhase1(peopleToProcess);
+                logger.debug("🧭 Phase 1 candidate count: {}", phase1People.size());
 
-                    try {
-                        if (tribunalBusquedaService.puedeMarcarComoProcessada(personaProcesada.getId(), requestId, "PHASE_1")) {
-                            logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
-                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                if (!phase1People.isEmpty()) {
+                    logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
+                    for (PersonaDTO person : phase1People) {
+                        PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
+                        logger.debug("👤 [PHASE 1] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                        List<ResultDTO> personResults = processPersonWithThreadPool(
+                                person,
+                                phase1Scraper,
+                                "PHASE 1",
+                                "PHASE_1",
+                                requestId,
+                                personaProcesada.getId());
+                        allResults.addAll(personResults);
+                        logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
 
-                            personaProcesadaPersistenceService.markTribunalPrincipalAsProcessed(personaProcesada);
+                        try {
+                            if (tribunalBusquedaService.puedeMarcarComoProcessada(personaProcesada.getId(), requestId, "PHASE_1")) {
+                                logger.info("📝 Marking person as processed after Phase 1: {} {} {}",
+                                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
 
-                            logger.info("✅ Person marked as processed in tracking table (tribunal_principal_procesado=true)");
-                        } else {
-                            logger.warn("⚠️ Person NOT marked after Phase 1 because some tribunals ended with scraper/connection errors or remained pending: {} {} {}",
-                                person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                                personaProcesadaPersistenceService.markTribunalPrincipalAsProcessed(personaProcesada);
+
+                                logger.info("✅ Person marked as processed in tracking table (tribunal_principal_procesado=true)");
+                            } else {
+                                logger.warn("⚠️ Person NOT marked after Phase 1 because some tribunals ended with scraper/connection errors or remained pending: {} {} {}",
+                                    person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
+                            }
+                        } catch (Exception e) {
+                            logger.error("❌ Error evaluating person completion after Phase 1: {}", e.getMessage(), e);
                         }
-                    } catch (Exception e) {
-                        logger.error("❌ Error evaluating person completion after Phase 1: {}", e.getMessage(), e);
                     }
+                    logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
+                } else {
+                    logger.info("ℹ️  Phase 1: No people pending");
                 }
-                logger.info("✅ Phase 1 completed. Found {} results", allResults.size());
             } else {
-                logger.info("ℹ️  Phase 1: No people pending");
+                logger.info("⏭️  Phase 1 skipped because Santiago search is disabled");
             }
 
             if (isAllRegionEnabled) {
