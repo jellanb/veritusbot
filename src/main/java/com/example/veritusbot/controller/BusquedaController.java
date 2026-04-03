@@ -44,7 +44,8 @@ public class BusquedaController {
     public ResponseEntity<?> searchPeople(
             @RequestParam(value = "archivo", defaultValue = "personas.csv") String archivo,
             @RequestParam(value = "isAllRegionEnabled", defaultValue = "true") boolean isAllRegionEnabled,
-            @RequestParam(value = "isSantiagoEnabled", defaultValue = "true") boolean isSantiagoEnabled) {
+            @RequestParam(value = "isSantiagoEnabled", defaultValue = "true") boolean isSantiagoEnabled,
+            @RequestParam(value = "searchName", required = false) String searchName) {
 
         try {
             // Log request
@@ -88,9 +89,19 @@ public class BusquedaController {
             System.out.println("📊 Loaded " + people.size() + " people from " + archivo);
 
             int threadsPerPerson = searchRuntimeConfigService.getThreadsPerPerson();
+            String effectiveSearchName = (searchName == null || searchName.isBlank())
+                    ? "Busqueda " + requestId
+                    : searchName.trim();
 
             // Launch async processing
-            asyncProcessingService.processSearchAsync(people, requestId, isAllRegionEnabled, isSantiagoEnabled, threadsPerPerson);
+            asyncProcessingService.processSearchAsync(
+                    people,
+                    requestId,
+                    effectiveSearchName,
+                    isAllRegionEnabled,
+                    isSantiagoEnabled,
+                    threadsPerPerson
+            );
 
             // Return 202 Accepted immediately
             Map<String, Object> response = new HashMap<>();
@@ -102,6 +113,7 @@ public class BusquedaController {
             response.put("isSantiagoEnabled", isSantiagoEnabled);
             response.put("threadsPerPerson", threadsPerPerson);
             response.put("processingMessage", "Search is being processed in the background");
+            response.put("searchName", effectiveSearchName);
 
             System.out.println("✅ Request accepted: " + requestId);
             System.out.println("🔄 Processing started in background");

@@ -8,6 +8,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -66,5 +67,28 @@ class ProxySelectorServiceTest {
         assertEquals("http://10.0.0.3:8080", result.server());
         assertNull(result.username());
         assertNull(result.password());
+    }
+
+    @Test
+    void acquireExclusiveProxyOrNullShouldNotReuseAProxyUntilReleased() {
+        ProxiSetting proxy1 = new ProxiSetting("http://10.0.0.1:8080", "user1", "pass1", true, 1);
+        ProxiSetting proxy2 = new ProxiSetting("http://10.0.0.2:8080", "user2", "pass2", true, 2);
+        when(proxiSettingService.listarActivos()).thenReturn(List.of(proxy1, proxy2));
+
+        ProxySelectorService.ProxyConfig first = service.acquireExclusiveProxyOrNull(Duration.ofMillis(10));
+        ProxySelectorService.ProxyConfig second = service.acquireExclusiveProxyOrNull(Duration.ofMillis(10));
+
+        assertNotNull(first);
+        assertNotNull(second);
+        assertNotEquals(first.server(), second.server());
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> service.acquireExclusiveProxyOrNull(Duration.ofMillis(10)));
+        assertTrue(ex.getMessage().contains("No hay proxies disponibles"));
+
+        service.releaseExclusiveProxy(first.server());
+        ProxySelectorService.ProxyConfig third = service.acquireExclusiveProxyOrNull(Duration.ofMillis(10));
+        assertNotNull(third);
+        assertEquals(first.server(), third.server());
     }
 }

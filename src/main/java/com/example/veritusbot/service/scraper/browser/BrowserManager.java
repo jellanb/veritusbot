@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentMap;
 @Component
 public class BrowserManager {
     private static final Logger logger = LoggerFactory.getLogger(BrowserManager.class);
+    private static final String NO_PROXY_LABEL = "no-proxy";
+    private static final String UNKNOWN_PROXY_LABEL = "unknown-proxy";
 
     @Value("${app.scraper.browser.headless:true}")
     private boolean headlessBrowser;
@@ -55,21 +57,23 @@ public class BrowserManager {
         Playwright playwright = null;
         Browser browser = null;
         BrowserContext context = null;
+        String leasedProxyServer = null;
         String safeClientKey = sanitizeClientKey(clientKey);
         Path sessionPath = getSessionPath(safeClientKey);
         logger.debug("🚀 Launching browser for clientKey={} (sessionPath={}, headless={})", safeClientKey, sessionPath, headlessBrowser);
-        
+
         try {
             // Create NEW instances each time (don't reuse old ones)
             playwright = Playwright.create();
             resourceCleanupManager.registerPlaywright(playwright);
-            
-            ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.pickNextProxyOrNull();
+
+            ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.acquireExclusiveProxyOrNull();
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
                     .setHeadless(headlessBrowser)
                     .setTimeout(90000);
 
             if (selectedProxy != null) {
+                leasedProxyServer = selectedProxy.server();
                 Proxy proxy = new Proxy(selectedProxy.server());
                 if (selectedProxy.username() != null) {
                     proxy.setUsername(selectedProxy.username());
@@ -78,7 +82,7 @@ public class BrowserManager {
                     proxy.setPassword(selectedProxy.password());
                 }
                 launchOptions.setProxy(proxy);
-                logger.info("Using sequential proxy for this browser instance: {}", selectedProxy.server());
+                logger.info("Using exclusive proxy for this browser instance: {}", selectedProxy.server());
             } else {
                 logger.warn("No proxies configured; launching browser without proxy");
             }
@@ -106,23 +110,25 @@ public class BrowserManager {
             context = browser.newContext(contextOptions);
             context.addInitScript("Object.defineProperty(navigator, 'platform', { get: () => '" + ScraperConfig.BROWSER_PLATFORM + "' });");
             resourceCleanupManager.registerBrowserContext(context);
-            
+
             Page page = context.newPage();
             resourceCleanupManager.registerPage(page);
             pageSessionPaths.put(page, sessionPath);
-            pageProxyLabels.put(page, selectedProxy != null ? selectedProxy.server() : "no-proxy");
+            pageProxyLabels.put(page, leasedProxyServer != null ? leasedProxyServer : NO_PROXY_LABEL);
             logger.debug("🧷 Registered page resources (proxyLabel={})", getProxyLabel(page));
-            
+
             logger.info("✓ Browser launched successfully");
             return page;
         } catch (Exception e) {
             logger.error("❌ Error launching browser: ", e);
+            releaseProxyLease(leasedProxyServer);
+
             // Clean up on failure
             if (browser != null) {
-                try { 
-                    browser.close(); 
-                } catch (Exception ex) { 
-                    logger.error("Error closing browser after failure", ex); 
+                try {
+                    browser.close();
+                } catch (Exception ex) {
+                    logger.error("Error closing browser after failure", ex);
                 }
             }
             if (context != null) {
@@ -133,10 +139,10 @@ public class BrowserManager {
                 }
             }
             if (playwright != null) {
-                try { 
-                    playwright.close(); 
-                } catch (Exception ex) { 
-                    logger.error("Error closing playwright after failure", ex); 
+                try {
+                    playwright.close();
+                } catch (Exception ex) {
+                    logger.error("Error closing playwright after failure", ex);
                 }
             }
             throw new RuntimeException("Failed to launch browser", e);
@@ -171,33 +177,36 @@ public class BrowserManager {
             if (page != null) {
                 BrowserContext context = page.context();
                 Path sessionPath = pageSessionPaths.remove(page);
-                pageProxyLabels.remove(page);
+                String proxyLabel = pageProxyLabels.remove(page);
                 logger.debug("🧹 Closing page resources (sessionPath={})", sessionPath);
-
-                if (sessionPath != null && context != null) {
-                    persistSessionState(context, sessionPath);
-                }
-
-                // Close page first
-                page.close();
-                resourceCleanupManager.unregisterPage(page);
-                
-                // Then close context
                 try {
-                    if (context != null) {
-                        context.close();
-                        resourceCleanupManager.unregisterBrowserContext(context);
+                    if (sessionPath != null && context != null) {
+                        persistSessionState(context, sessionPath);
                     }
 
-                    Browser browser = context != null ? context.browser() : null;
-                    if (browser != null) {
-                        browser.close();
-                        resourceCleanupManager.unregisterBrowser(browser);
+                    // Close page first
+                    page.close();
+                    resourceCleanupManager.unregisterPage(page);
+
+                    // Then close context and browser
+                    try {
+                        if (context != null) {
+                            context.close();
+                            resourceCleanupManager.unregisterBrowserContext(context);
+                        }
+
+                        Browser browser = context != null ? context.browser() : null;
+                        if (browser != null) {
+                            browser.close();
+                            resourceCleanupManager.unregisterBrowser(browser);
+                        }
+                    } catch (Exception e) {
+                        logger.debug("Browser already closed: {}", e.getMessage());
                     }
-                } catch (Exception e) {
-                    logger.debug("Browser already closed: {}", e.getMessage());
+                } finally {
+                    releaseProxyLease(proxyLabel);
                 }
-                
+
                 logger.info("✓ Browser closed");
             }
         } catch (Exception e) {
@@ -212,9 +221,9 @@ public class BrowserManager {
      */
     public String getProxyLabel(Page page) {
         if (page == null) {
-            return "unknown-proxy";
+            return UNKNOWN_PROXY_LABEL;
         }
-        return pageProxyLabels.getOrDefault(page, "unknown-proxy");
+        return pageProxyLabels.getOrDefault(page, UNKNOWN_PROXY_LABEL);
     }
 
     private void persistSessionState(BrowserContext context, Path sessionPath) {
@@ -237,5 +246,11 @@ public class BrowserManager {
         }
         return value.toLowerCase().replaceAll("[^a-z0-9._-]", "_");
     }
-}
 
+    private void releaseProxyLease(String proxyLabel) {
+        if (proxyLabel == null || NO_PROXY_LABEL.equals(proxyLabel) || UNKNOWN_PROXY_LABEL.equals(proxyLabel)) {
+            return;
+        }
+        proxySelectorService.releaseExclusiveProxy(proxyLabel);
+    }
+}

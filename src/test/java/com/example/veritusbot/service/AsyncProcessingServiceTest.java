@@ -33,11 +33,14 @@ class AsyncProcessingServiceTest {
     @Mock
     private ScraperOrchestrator scraperOrchestrator;
 
+    @Mock
+    private DashboardStatusService dashboardStatusService;
+
     private AsyncProcessingService asyncProcessingService;
 
     @BeforeEach
     void setUp() {
-        asyncProcessingService = new AsyncProcessingService(processingStateManager, scraperOrchestrator);
+        asyncProcessingService = new AsyncProcessingService(processingStateManager, scraperOrchestrator, dashboardStatusService);
     }
 
     @Test
@@ -45,18 +48,19 @@ class AsyncProcessingServiceTest {
         PersonaDTO person = new PersonaDTO("Ana", "Perez", "Diaz", 2020, 2020);
         when(processingStateManager.tryAcquireLock("Ana")).thenReturn(false);
 
-        asyncProcessingService.processSearchAsync(List.of(person), "REQ-1", true, true, 1);
+        asyncProcessingService.processSearchAsync(List.of(person), "REQ-1", "Busqueda 1", true, true, 1);
 
         verify(processingStateManager, times(1)).tryAcquireLock("Ana");
         verify(scraperOrchestrator, never()).scrapePeople(anyList(), org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), anyString(), org.mockito.ArgumentMatchers.anyInt());
         verify(processingStateManager, never()).releaseLock();
+        verify(dashboardStatusService, never()).finishSearch();
     }
 
     @Test
     void processSearchAsyncShouldUseUnknownWhenPeopleListIsEmpty() {
         when(processingStateManager.tryAcquireLock("Unknown")).thenReturn(false);
 
-        asyncProcessingService.processSearchAsync(List.of(), "REQ-EMPTY", true, true, 1);
+        asyncProcessingService.processSearchAsync(List.of(), "REQ-EMPTY", "Busqueda Empty", true, true, 1);
 
         verify(processingStateManager, times(1)).tryAcquireLock("Unknown");
         verify(scraperOrchestrator, never()).scrapePeople(anyList(), org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), anyString(), org.mockito.ArgumentMatchers.anyInt());
@@ -70,9 +74,12 @@ class AsyncProcessingServiceTest {
                 new ResultDTO("Luis Gomez Rojas", "Tribunal", 2021, "OK", "detalle")
         ));
 
-        asyncProcessingService.processSearchAsync(List.of(person), "REQ-2", true, true, 2);
+        asyncProcessingService.processSearchAsync(List.of(person), "REQ-2", "Busqueda 2", true, true, 2);
 
+        verify(dashboardStatusService, times(1)).beginSearch("REQ-2", "Busqueda 2", 1, true, true);
         verify(scraperOrchestrator, times(1)).scrapePeople(List.of(person), true, true, "REQ-2", 2);
+        verify(dashboardStatusService, times(1)).addFoundResults(1);
+        verify(dashboardStatusService, times(1)).finishSearch();
         verify(processingStateManager, times(1)).releaseLock();
     }
 
@@ -82,9 +89,12 @@ class AsyncProcessingServiceTest {
         when(processingStateManager.tryAcquireLock("Maria")).thenReturn(true);
         doThrow(new RuntimeException("boom")).when(scraperOrchestrator).scrapePeople(List.of(person), false, false, "REQ-3", 1);
 
-        asyncProcessingService.processSearchAsync(List.of(person), "REQ-3", false, false, 1);
+        asyncProcessingService.processSearchAsync(List.of(person), "REQ-3", "Busqueda 3", false, false, 1);
 
+        verify(dashboardStatusService, times(1)).beginSearch("REQ-3", "Busqueda 3", 1, false, false);
         verify(scraperOrchestrator, times(1)).scrapePeople(List.of(person), false, false, "REQ-3", 1);
+        verify(dashboardStatusService, never()).addFoundResults(org.mockito.ArgumentMatchers.anyInt());
+        verify(dashboardStatusService, times(1)).finishSearch();
         verify(processingStateManager, times(1)).releaseLock();
     }
 

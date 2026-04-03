@@ -22,6 +22,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.ThreadLocalRandom;
 import com.example.veritusbot.service.scraper.retry.RetryableScraperException;
+import com.example.veritusbot.service.DashboardStatusService;
 
 @Service
 public class ScraperOrchestrator {
@@ -34,6 +35,7 @@ public class ScraperOrchestrator {
     private final PersonaProcesadaPersistenceService personaProcesadaPersistenceService;
     private final TribunalBusquedaService tribunalBusquedaService;
     private final ProxiSettingService proxiSettingService;
+    private final DashboardStatusService dashboardStatusService;
 
     @Value("${app.pjud.url}")
     private String pjudUrl;
@@ -46,7 +48,8 @@ public class ScraperOrchestrator {
                                ProcessingStateManager processingStateManager,
                                PersonaProcesadaPersistenceService personaProcesadaPersistenceService,
                                TribunalBusquedaService tribunalBusquedaService,
-                               ProxiSettingService proxiSettingService) {
+                               ProxiSettingService proxiSettingService,
+                               DashboardStatusService dashboardStatusService) {
         this.browserManager = browserManager;
         this.phase1Scraper = phase1Scraper;
         this.phase2Scraper = phase2Scraper;
@@ -54,6 +57,7 @@ public class ScraperOrchestrator {
         this.personaProcesadaPersistenceService = personaProcesadaPersistenceService;
         this.tribunalBusquedaService = tribunalBusquedaService;
         this.proxiSettingService = proxiSettingService;
+        this.dashboardStatusService = dashboardStatusService;
 
         // Reset state on initialization to prevent leftover state from previous runs
         processingStateManager.resetState();
@@ -74,6 +78,7 @@ public class ScraperOrchestrator {
                 processingStateManager,
                 personaProcesadaPersistenceService,
                 tribunalBusquedaService,
+                null,
                 null);
     }
 
@@ -120,6 +125,9 @@ public class ScraperOrchestrator {
                                 personaProcesada.getId(),
                                 effectiveMaxThreads);
                         allResults.addAll(personResults);
+                        if (dashboardStatusService != null) {
+                            dashboardStatusService.markSantiagoProgress();
+                        }
                         logger.debug("📦 [PHASE 1] Person finished with {} results", personResults.size());
 
                         try {
@@ -165,6 +173,9 @@ public class ScraperOrchestrator {
                                 personaProcesada.getId(),
                                 effectiveMaxThreads);
                         allResults.addAll(personResults);
+                        if (dashboardStatusService != null) {
+                            dashboardStatusService.markRegionesProgress();
+                        }
                         logger.debug("📦 [PHASE 2] Person finished with {} results", personResults.size());
 
                         // Mark person as fully processed only when Phase 2 is executed

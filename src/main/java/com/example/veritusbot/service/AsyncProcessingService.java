@@ -19,11 +19,14 @@ public class AsyncProcessingService {
 
     private final ProcessingStateManager processingStateManager;
     private final ScraperOrchestrator scraperOrchestrator;
+    private final DashboardStatusService dashboardStatusService;
 
     public AsyncProcessingService(ProcessingStateManager processingStateManager,
-                                  ScraperOrchestrator scraperOrchestrator) {
+                                  ScraperOrchestrator scraperOrchestrator,
+                                  DashboardStatusService dashboardStatusService) {
         this.processingStateManager = processingStateManager;
         this.scraperOrchestrator = scraperOrchestrator;
+        this.dashboardStatusService = dashboardStatusService;
     }
 
     /**
@@ -39,6 +42,7 @@ public class AsyncProcessingService {
     public void processSearchAsync(
             List<PersonaDTO> people,
             String requestId,
+            String searchName,
             boolean isAllRegionEnabled,
             boolean isSantiagoEnabled,
             int threadsPerPerson) {
@@ -51,6 +55,14 @@ public class AsyncProcessingService {
         }
 
         try {
+            dashboardStatusService.beginSearch(
+                    requestId,
+                    searchName,
+                    people.size(),
+                    isSantiagoEnabled,
+                    isAllRegionEnabled
+            );
+
             logger.info("▶️  Starting async processing for request: {}", requestId);
             logger.info("📋 Processing {} people", people.size());
             logger.info("🧭 All-region search enabled: {}", isAllRegionEnabled);
@@ -65,6 +77,8 @@ public class AsyncProcessingService {
                     requestId,
                     threadsPerPerson);
 
+            dashboardStatusService.addFoundResults(results.size());
+
             logger.info("✅ Async processing completed for request: {}", requestId);
             logger.info("📊 Found {} results", results.size());
 
@@ -72,6 +86,7 @@ public class AsyncProcessingService {
             logger.error("❌ Error during async processing of request {}: {}", 
                 requestId, e.getMessage(), e);
         } finally {
+            dashboardStatusService.finishSearch();
             // Always release lock
             processingStateManager.releaseLock();
             logger.info("🔓 Processing lock released for request: {}", requestId);
