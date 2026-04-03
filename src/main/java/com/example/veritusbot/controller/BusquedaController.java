@@ -157,6 +157,27 @@ public class BusquedaController {
     }
 
     /**
+     * Endpoint para solicitar la detencion de una busqueda en curso.
+     * POST /api/buscar-personas/detener
+     */
+    @PostMapping("/api/buscar-personas/detener")
+    public ResponseEntity<?> stopSearch() {
+        if (!asyncProcessingService.isBusy()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    new ErrorResponseDTO("No hay una busqueda en ejecucion", "NO_ACTIVE_SEARCH")
+            );
+        }
+
+        asyncProcessingService.requestStop();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "STOP_REQUESTED");
+        response.put("message", "Se solicito detener la busqueda en curso");
+
+        return ResponseEntity.accepted().body(response);
+    }
+
+    /**
      * Health check endpoint
      * GET /api/health
      */

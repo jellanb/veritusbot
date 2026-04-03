@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Service responsible for asynchronous processing of search requests
@@ -20,6 +22,8 @@ public class AsyncProcessingService {
     private final ProcessingStateManager processingStateManager;
     private final ScraperOrchestrator scraperOrchestrator;
     private final DashboardStatusService dashboardStatusService;
+    private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+    private volatile Thread currentProcessingThread;
 
     public AsyncProcessingService(ProcessingStateManager processingStateManager,
                                   ScraperOrchestrator scraperOrchestrator,
@@ -46,6 +50,8 @@ public class AsyncProcessingService {
             boolean isAllRegionEnabled,
             boolean isSantiagoEnabled,
             int threadsPerPerson) {
+        stopRequested.set(false);
+        currentProcessingThread = Thread.currentThread();
         String firstPersonName = !people.isEmpty() ? people.get(0).getNombres() : "Unknown";
 
         // Try to acquire lock
@@ -82,10 +88,16 @@ public class AsyncProcessingService {
             logger.info("✅ Async processing completed for request: {}", requestId);
             logger.info("📊 Found {} results", results.size());
 
+            if (stopRequested.get()) {
+                logger.warn("⏹️  Processing was stopped by user request for request: {}", requestId);
+            }
+
         } catch (Exception e) {
             logger.error("❌ Error during async processing of request {}: {}", 
                 requestId, e.getMessage(), e);
         } finally {
+            currentProcessingThread = null;
+            stopRequested.set(false);
             dashboardStatusService.finishSearch();
             // Always release lock
             processingStateManager.releaseLock();
@@ -109,6 +121,30 @@ public class AsyncProcessingService {
      */
     public ProcessingStateManager.ProcessingState getState() {
         return processingStateManager.getState();
+    }
+
+    /**
+     * Solicita detener el procesamiento en curso.
+     *
+     * @return true si se envio la solicitud de detencion, false si no habia proceso activo
+     */
+    public boolean requestStop() {
+        if (!isBusy()) {
+            return false;
+        }
+
+        stopRequested.set(true);
+        Thread processingThread = currentProcessingThread;
+        if (processingThread != null) {
+            processingThread.interrupt();
+        }
+
+        logger.warn("⏹️  Stop requested for current processing");
+        return true;
+    }
+
+    public boolean isStopRequested() {
+        return stopRequested.get();
     }
 }
 

@@ -71,6 +71,7 @@ public class SecurityConfig {
 
                         // 🔐 PROTEGIDOS - Requieren autenticación
                         .requestMatchers(HttpMethod.POST, "/api/buscar-personas").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/buscar-personas/detener").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/buscar-personas/**").authenticated()
 
                         // Por defecto, todos los demás requieren autenticación

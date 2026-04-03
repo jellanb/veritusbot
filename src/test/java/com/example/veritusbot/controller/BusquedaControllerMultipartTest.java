@@ -26,6 +26,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -140,6 +141,27 @@ class BusquedaControllerMultipartTest {
         mockMvc.perform(multipart("/api/buscar-personas").file(file))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.status").value("BUSY"));
+    }
+
+    @Test
+    void stopSearchShouldReturnAcceptedWhenProcessingIsActive() throws Exception {
+        when(asyncProcessingService.isBusy()).thenReturn(true);
+        when(asyncProcessingService.requestStop()).thenReturn(true);
+
+        mockMvc.perform(post("/api/buscar-personas/detener"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("STOP_REQUESTED"));
+
+        verify(asyncProcessingService).requestStop();
+    }
+
+    @Test
+    void stopSearchShouldReturnConflictWhenNoProcessingIsActive() throws Exception {
+        when(asyncProcessingService.isBusy()).thenReturn(false);
+
+        mockMvc.perform(post("/api/buscar-personas/detener"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("NO_ACTIVE_SEARCH"));
     }
 }
 

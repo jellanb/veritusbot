@@ -114,6 +114,11 @@ public class ScraperOrchestrator {
                 if (!phase1People.isEmpty()) {
                     logger.info("▶️  PHASE 1: Processing Santiago tribunals...");
                     for (PersonaDTO person : phase1People) {
+                        if (Thread.currentThread().isInterrupted()) {
+                            logger.warn("⏹️  Interruption detected before Phase 1 person processing. Stopping orchestrator.");
+                            return allResults;
+                        }
+
                         PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
                         logger.debug("👤 [PHASE 1] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
                         List<ResultDTO> personResults = processPersonWithThreadPool(
@@ -162,6 +167,11 @@ public class ScraperOrchestrator {
                 if (!phase2People.isEmpty()) {
                     logger.info("▶️  PHASE 2: Processing other tribunals...");
                     for (PersonaDTO person : phase2People) {
+                        if (Thread.currentThread().isInterrupted()) {
+                            logger.warn("⏹️  Interruption detected before Phase 2 person processing. Stopping orchestrator.");
+                            return allResults;
+                        }
+
                         PersonaProcesada personaProcesada = personaProcesadaPersistenceService.getOrCreatePersonaProcesada(person);
                         logger.debug("👤 [PHASE 2] Starting person {} {} {}", person.getNombres(), person.getApellidoPaterno(), person.getApellidoMaterno());
                         List<ResultDTO> personResults = processPersonWithThreadPool(
@@ -247,6 +257,11 @@ public class ScraperOrchestrator {
 
             // Submit a task for each year
             for (int year = person.getAnioInit(); year <= person.getAnioFin(); year++) {
+                if (Thread.currentThread().isInterrupted()) {
+                    logger.warn("⏹️  Interruption detected while scheduling years for {}. Stopping scheduling.", clientKey);
+                    break;
+                }
+
                 final int currentYear = year;
                 logger.debug("🧵 Scheduling {} year {} for {}", phaseName, currentYear, clientKey);
                 
@@ -262,6 +277,11 @@ public class ScraperOrchestrator {
                     int resumeFromTribunalPosition = 0;
                     
                     while (retryCount < maxRetries && !success) {
+                        if (Thread.currentThread().isInterrupted()) {
+                            logger.warn("   ⏹️  [{}] Interrupted before attempt loop for year {}", Thread.currentThread().getName(), currentYear);
+                            break;
+                        }
+
                         retryCount++;
                         Page page = null;
                         
