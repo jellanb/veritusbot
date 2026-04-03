@@ -117,6 +117,16 @@ EXIT
 
 ## 5) Compilar la app
 
+### Paso previo recomendado: asegurar permisos del repo
+
+Si el proyecto fue clonado o manipulado con `sudo`, ajusta permisos antes de compilar para evitar errores de escritura en build/logs:
+
+```bash
+sudo chown -R ubuntu:ubuntu /opt/veritusbot
+```
+
+> Si usas otro usuario del sistema, reemplaza `ubuntu:ubuntu` por tu usuario/grupo.
+
 ```bash
 cd /opt/veritusbot
 chmod +x mvnw

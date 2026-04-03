@@ -112,10 +112,12 @@ public class BrowserManager {
             resourceCleanupManager.registerBrowserContext(context);
 
             Page page = context.newPage();
+            page.setDefaultTimeout(90000);
+            page.setDefaultNavigationTimeout(90000);
             resourceCleanupManager.registerPage(page);
             pageSessionPaths.put(page, sessionPath);
             pageProxyLabels.put(page, leasedProxyServer != null ? leasedProxyServer : NO_PROXY_LABEL);
-            logger.debug("🧷 Registered page resources (proxyLabel={})", getProxyLabel(page));
+            logger.debug("🧷 Registered page resources (proxyLabel={}, pageTimeout=90000ms)", getProxyLabel(page));
 
             logger.info("✓ Browser launched successfully");
             return page;
