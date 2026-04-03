@@ -1,99 +1,98 @@
 package com.example.veritusbot.controller;
 
+import com.example.veritusbot.dto.BusyResponseDTO;
+import com.example.veritusbot.dto.BusquedaPersonasAcceptedResponseDTO;
+import com.example.veritusbot.dto.ErrorResponseDTO;
 import com.example.veritusbot.dto.PersonaDTO;
+import com.example.veritusbot.exception.InvalidClientFileException;
 import com.example.veritusbot.service.AsyncProcessingService;
-import com.example.veritusbot.service.ExcelService;
+import com.example.veritusbot.service.ClientFileParserService;
 import com.example.veritusbot.service.ProcessingStateManager;
 import com.example.veritusbot.service.SearchRuntimeConfigService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 public class BusquedaController {
 
-    @Autowired
-    private ExcelService excelService;
+    private static final Logger logger = LoggerFactory.getLogger(BusquedaController.class);
 
-    @Autowired
-    private AsyncProcessingService asyncProcessingService;
+    private final ClientFileParserService clientFileParserService;
+    private final AsyncProcessingService asyncProcessingService;
+    private final ProcessingStateManager processingStateManager;
+    private final SearchRuntimeConfigService searchRuntimeConfigService;
 
-    @Autowired
-    private ProcessingStateManager processingStateManager;
-
-    @Autowired
-    private SearchRuntimeConfigService searchRuntimeConfigService;
+    public BusquedaController(ClientFileParserService clientFileParserService,
+                              AsyncProcessingService asyncProcessingService,
+                              ProcessingStateManager processingStateManager,
+                              SearchRuntimeConfigService searchRuntimeConfigService) {
+        this.clientFileParserService = clientFileParserService;
+        this.asyncProcessingService = asyncProcessingService;
+        this.processingStateManager = processingStateManager;
+        this.searchRuntimeConfigService = searchRuntimeConfigService;
+    }
 
     /**
      * Endpoint to search for people asynchronously
-     * POST /api/buscar-personas?archivo=personas.csv&isAllRegionEnabled=true&isSantiagoEnabled=true
-     * 
+     * POST /api/buscar-personas?isAllRegionEnabled=true&isSantiagoEnabled=true
+     * Content-Type: multipart/form-data (campo: file)
+     *
      * Returns:
      * - 202 Accepted if request accepted and processing started
      * - 429 Too Many Requests if system is busy
      */
     @PostMapping("/api/buscar-personas")
     public ResponseEntity<?> searchPeople(
-            @RequestParam(value = "archivo", defaultValue = "personas.csv") String archivo,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "isAllRegionEnabled", defaultValue = "true") boolean isAllRegionEnabled,
             @RequestParam(value = "isSantiagoEnabled", defaultValue = "true") boolean isSantiagoEnabled,
             @RequestParam(value = "searchName", required = false) String searchName) {
 
         try {
-            // Log request
             String requestId = UUID.randomUUID().toString();
-            System.out.println("\n╔════════════════════════════════════════════════════════════╗");
-            System.out.println("║  SEARCH REQUEST RECEIVED                                     ║");
-            System.out.println("║  Request ID: " + requestId);
-            System.out.println("║  File: " + archivo);
-            System.out.println("║  All Region Enabled: " + isAllRegionEnabled);
-            System.out.println("║  Santiago Enabled: " + isSantiagoEnabled);
-            System.out.println("║  Threads per Person (runtime): " + searchRuntimeConfigService.getThreadsPerPerson());
-            System.out.println("╚════════════════════════════════════════════════════════════╝\n");
+            logger.info("Solicitud de busqueda recibida requestId={} allRegion={} santiago={}",
+                    requestId,
+                    isAllRegionEnabled,
+                    isSantiagoEnabled);
 
-            // Check if system is busy
             if (asyncProcessingService.isBusy()) {
                 ProcessingStateManager.ProcessingState state = asyncProcessingService.getState();
                 String message = String.format(
-                    "System is busy processing '%s'. Please try again later.",
-                    state.getCurrentPerson()
+                    "El sistema esta ocupado procesando '%s'. Intenta nuevamente en unos minutos.",
+                    state.getCurrentPerson() == null ? "N/A" : state.getCurrentPerson()
                 );
 
-                System.out.println("⚠️  " + message);
-                System.out.println("📊 Processing: " + state.getTotalRequests() + " total requests");
+                BusyResponseDTO response = new BusyResponseDTO();
+                response.setStatus("BUSY");
+                response.setMessage(message);
+                response.setCurrentPerson(state.getCurrentPerson());
+                response.setProcessingTimeMs(state.getProcessingTimeMs());
 
-                Map<String, Object> response = new HashMap<>();
-                response.put("status", "BUSY");
-                response.put("message", message);
-                response.put("currentPerson", state.getCurrentPerson());
-                response.put("processingTimeMs", state.getProcessingTimeMs());
+                logger.warn("requestId={} rechazada por sistema ocupado", requestId);
 
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
             }
 
-            // Read people from CSV
-            List<PersonaDTO> people = excelService.readClientFromCSV(archivo);
-
-            if (people.isEmpty()) {
-                return ResponseEntity.ok("⚠ No people found in CSV file");
-            }
-
-            System.out.println("📊 Loaded " + people.size() + " people from " + archivo);
+            List<PersonaDTO> people = clientFileParserService.parseAndValidate(file);
 
             int threadsPerPerson = searchRuntimeConfigService.getThreadsPerPerson();
             String effectiveSearchName = (searchName == null || searchName.isBlank())
                     ? "Busqueda " + requestId
                     : searchName.trim();
 
-            // Launch async processing
             asyncProcessingService.processSearchAsync(
                     people,
                     requestId,
@@ -103,33 +102,31 @@ public class BusquedaController {
                     threadsPerPerson
             );
 
-            // Return 202 Accepted immediately
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "ACCEPTED");
-            response.put("message", "Request accepted and processing started");
-            response.put("requestId", requestId);
-            response.put("peopleCount", people.size());
-            response.put("isAllRegionEnabled", isAllRegionEnabled);
-            response.put("isSantiagoEnabled", isSantiagoEnabled);
-            response.put("threadsPerPerson", threadsPerPerson);
-            response.put("processingMessage", "Search is being processed in the background");
-            response.put("searchName", effectiveSearchName);
+            BusquedaPersonasAcceptedResponseDTO response = new BusquedaPersonasAcceptedResponseDTO();
+            response.setStatus("ACCEPTED");
+            response.setMessage("Solicitud aceptada. La busqueda fue iniciada en segundo plano");
+            response.setRequestId(requestId);
+            response.setPeopleCount(people.size());
+            response.setAllRegionEnabled(isAllRegionEnabled);
+            response.setSantiagoEnabled(isSantiagoEnabled);
+            response.setThreadsPerPerson(threadsPerPerson);
+            response.setProcessingMessage("El proceso de busqueda ya esta en ejecucion");
+            response.setSearchName(effectiveSearchName);
 
-            System.out.println("✅ Request accepted: " + requestId);
-            System.out.println("🔄 Processing started in background");
-            System.out.println("📋 Results will be saved to: resultados_busqueda.csv\n");
+            logger.info("requestId={} aceptada con {} clientes", requestId, people.size());
 
             return ResponseEntity.accepted().body(response);
 
+        } catch (InvalidClientFileException e) {
+            logger.warn("Error de validacion del archivo: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    new ErrorResponseDTO("Archivo invalido", "INVALID_FILE", e.getMessage())
+            );
         } catch (Exception e) {
-            System.err.println("❌ Error processing request: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", "Error: " + e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            logger.error("Error interno al procesar solicitud de busqueda", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                    new ErrorResponseDTO("Error interno al procesar la solicitud", "INTERNAL_ERROR")
+            );
         }
     }
 
