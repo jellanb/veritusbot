@@ -32,5 +32,10 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
      * @return true si existe, false en caso contrario
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Lista todos los usuarios ordenados por nombre para poblar selectores en frontend.
+     */
+    java.util.List<Usuario> findAllByOrderByNombreCompletoAsc();
 }
 

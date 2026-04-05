@@ -3,13 +3,16 @@ package com.example.veritusbot.controller;
 import com.example.veritusbot.dto.ErrorResponseDTO;
 import com.example.veritusbot.dto.LoginRequestDTO;
 import com.example.veritusbot.dto.LoginResponseDTO;
+import com.example.veritusbot.dto.UsuarioLoginOptionDTO;
 import com.example.veritusbot.exception.ContrasenaInvalidaException;
 import com.example.veritusbot.exception.UsuarioBloqueadoException;
 import com.example.veritusbot.exception.UsuarioNoEncontradoException;
+import com.example.veritusbot.service.UsuarioService;
 import com.example.veritusbot.service.auth.AuthenticationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,6 +36,9 @@ public class LoginController {
 
     @Autowired
     private AuthenticationService authenticationService;
+
+    @Autowired
+    private UsuarioService usuarioService;
 
     /**
      * Endpoint para autenticar usuarios.
@@ -149,6 +156,21 @@ public class LoginController {
         response.put("endpoint", "/api/veritus-app/login");
         response.put("metodo", "POST");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint público para que el frontend cargue usuarios existentes.
+     * Devuelve datos sin información sensible e incluye si están activos.
+     */
+    @GetMapping("/usuarios/listado")
+    public ResponseEntity<?> listarUsuariosParaFrontend() {
+        try {
+            List<UsuarioLoginOptionDTO> usuarios = usuarioService.listarUsuariosParaLogin();
+            return ResponseEntity.ok(usuarios);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponseDTO("Error al obtener listado de usuarios", "ERROR_INTERNO", e.getMessage()));
+        }
     }
 }
 

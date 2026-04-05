@@ -59,6 +59,7 @@ public class SecurityConfig {
                         // ✅ PÚBLICOS - Sin autenticación requerida
                         .requestMatchers(HttpMethod.POST, "/api/veritus-app/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/veritus-app/health-auth").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/veritus-app/usuarios/listado").permitAll()
                         .requestMatchers("/api/veritus-app/health-auth").permitAll()
 
                         // ✅ SWAGGER Y DOCS (si existen)
@@ -68,6 +69,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/veritus-app/usuarios").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/veritus-app/usuarios").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/veritus-app/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/veritus-app/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/veritus-app/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/veritus-app/usuarios/**").hasRole("ADMIN")
 
                         // 🔐 PROTEGIDOS - Requieren autenticación
                         .requestMatchers(HttpMethod.POST, "/api/buscar-personas").authenticated()

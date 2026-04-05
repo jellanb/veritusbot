@@ -2,6 +2,7 @@ package com.example.veritusbot.controller;
 
 import com.example.veritusbot.dto.CreateUsuarioRequestDTO;
 import com.example.veritusbot.dto.ErrorResponseDTO;
+import com.example.veritusbot.dto.UpdateUsuarioRequestDTO;
 import com.example.veritusbot.dto.UsuarioDTO;
 import com.example.veritusbot.exception.UsuarioNoEncontradoException;
 import com.example.veritusbot.exception.UsuarioYaExisteException;
@@ -148,6 +149,67 @@ public class UsuarioController {
         try {
             UsuarioDTO usuario = usuarioService.buscarPorId(id);
             return ResponseEntity.ok(usuario);
+
+        } catch (UsuarioNoEncontradoException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponseDTO(e.getMessage(), "USUARIO_NO_ENCONTRADO"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponseDTO("Error interno del servidor", "ERROR_INTERNO", e.getMessage()));
+        }
+    }
+
+    // ==================== EDITAR USUARIO ====================
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> editarUsuario(@PathVariable UUID id, @RequestBody UpdateUsuarioRequestDTO request) {
+        try {
+            UsuarioDTO usuarioActualizado = usuarioService.editarUsuario(id, request);
+            return ResponseEntity.ok(usuarioActualizado);
+
+        } catch (UsuarioNoEncontradoException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponseDTO(e.getMessage(), "USUARIO_NO_ENCONTRADO"));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ErrorResponseDTO(e.getMessage(), "DATOS_INVALIDOS"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponseDTO("Error interno del servidor", "ERROR_INTERNO", e.getMessage()));
+        }
+    }
+
+    // ==================== DESACTIVAR USUARIO ====================
+
+    @PatchMapping("/{id}/desactivar")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> desactivarUsuario(@PathVariable UUID id) {
+        try {
+            UsuarioDTO usuarioDesactivado = usuarioService.desactivarUsuario(id);
+            return ResponseEntity.ok(usuarioDesactivado);
+
+        } catch (UsuarioNoEncontradoException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponseDTO(e.getMessage(), "USUARIO_NO_ENCONTRADO"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponseDTO("Error interno del servidor", "ERROR_INTERNO", e.getMessage()));
+        }
+    }
+
+    // ==================== ELIMINAR USUARIO ====================
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> eliminarUsuario(@PathVariable UUID id) {
+        try {
+            usuarioService.eliminarUsuario(id);
+            return ResponseEntity.noContent().build();
 
         } catch (UsuarioNoEncontradoException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)

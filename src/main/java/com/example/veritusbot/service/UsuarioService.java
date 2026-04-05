@@ -1,6 +1,8 @@
 package com.example.veritusbot.service;
 
 import com.example.veritusbot.dto.CreateUsuarioRequestDTO;
+import com.example.veritusbot.dto.UpdateUsuarioRequestDTO;
+import com.example.veritusbot.dto.UsuarioLoginOptionDTO;
 import com.example.veritusbot.dto.UsuarioDTO;
 import com.example.veritusbot.exception.UsuarioNoEncontradoException;
 import com.example.veritusbot.exception.UsuarioYaExisteException;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -108,6 +111,18 @@ public class UsuarioService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retorna usuarios en formato reducido para cargar selectores en frontend,
+     * incluyendo si cada usuario está activo.
+     */
+    @Transactional(readOnly = true)
+    public List<UsuarioLoginOptionDTO> listarUsuariosParaLogin() {
+        return usuarioRepository.findAllByOrderByNombreCompletoAsc()
+                .stream()
+                .map(this::convertToLoginOptionDTO)
+                .collect(Collectors.toList());
+    }
+
     // ==================== BUSCAR POR ID ====================
 
     /**
@@ -124,6 +139,66 @@ public class UsuarioService {
                         "No existe usuario con id: " + id
                 ));
         return convertToDTO(usuario);
+    }
+
+    // ==================== EDITAR / DESACTIVAR / ELIMINAR ====================
+
+    /**
+     * Edita datos administrables de un usuario existente.
+     */
+    @Transactional
+    public UsuarioDTO editarUsuario(UUID id, UpdateUsuarioRequestDTO request) {
+        if (request == null || !request.hasAnyFieldToUpdate()) {
+            throw new IllegalArgumentException("Debe enviar al menos un campo para actualizar");
+        }
+
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new UsuarioNoEncontradoException("No existe usuario con id: " + id));
+
+        if (request.getNombreCompleto() != null) {
+            String nombre = request.getNombreCompleto().trim();
+            if (nombre.isEmpty()) {
+                throw new IllegalArgumentException("nombreCompleto no puede estar vacío");
+            }
+            usuario.setNombreCompleto(nombre);
+        }
+
+        if (request.getRol() != null) {
+            usuario.setRol(parsearRol(request.getRol()));
+        }
+
+        if (request.getEstado() != null) {
+            usuario.setEstado(parsearEstado(request.getEstado()));
+        }
+
+        Usuario actualizado = usuarioRepository.save(usuario);
+        return convertToDTO(actualizado);
+    }
+
+    /**
+     * Marca un usuario como INACTIVO.
+     */
+    @Transactional
+    public UsuarioDTO desactivarUsuario(UUID id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new UsuarioNoEncontradoException("No existe usuario con id: " + id));
+
+        if (!Objects.equals(usuario.getEstado(), EstadoUsuario.INACTIVO)) {
+            usuario.setEstado(EstadoUsuario.INACTIVO);
+            usuario = usuarioRepository.save(usuario);
+        }
+
+        return convertToDTO(usuario);
+    }
+
+    /**
+     * Elimina físicamente un usuario del sistema.
+     */
+    @Transactional
+    public void eliminarUsuario(UUID id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new UsuarioNoEncontradoException("No existe usuario con id: " + id));
+        usuarioRepository.delete(usuario);
     }
 
     // ==================== PRIVADOS ====================
@@ -148,6 +223,19 @@ public class UsuarioService {
         }
     }
 
+    private EstadoUsuario parsearEstado(String estadoString) {
+        if (estadoString == null || estadoString.trim().isEmpty()) {
+            throw new IllegalArgumentException("estado no puede ser vacío");
+        }
+        try {
+            return EstadoUsuario.valueOf(estadoString.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Estado inválido: '" + estadoString + "'. Valores permitidos: ACTIVO, INACTIVO, BLOQUEADO"
+            );
+        }
+    }
+
     /**
      * Convierte una entidad Usuario a DTO (nunca expone el hash).
      *
@@ -164,6 +252,15 @@ public class UsuarioService {
         dto.setCreatedAt(usuario.getCreatedAt());
         dto.setLastLogin(usuario.getLastLogin());
         return dto;
+    }
+
+    private UsuarioLoginOptionDTO convertToLoginOptionDTO(Usuario usuario) {
+        return new UsuarioLoginOptionDTO(
+                usuario.getId(),
+                usuario.getEmail(),
+                usuario.getNombreCompleto(),
+                usuario.getEstado() == EstadoUsuario.ACTIVO
+        );
     }
 }
 
