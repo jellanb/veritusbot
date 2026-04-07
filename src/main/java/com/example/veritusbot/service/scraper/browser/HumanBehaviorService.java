@@ -3,6 +3,7 @@ package com.example.veritusbot.service.scraper.browser;
 import com.example.veritusbot.service.scraper.config.ScraperConfig;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.options.LoadState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Component
 public class HumanBehaviorService {
     private static final Logger logger = LoggerFactory.getLogger(HumanBehaviorService.class);
+    private static final double NETWORK_IDLE_BEST_EFFORT_TIMEOUT_MS = 5000;
 
     public void pauseShort(Page page) {
         pause(page, ScraperConfig.HUMAN_PAUSE_MIN_MS, ScraperConfig.HUMAN_PAUSE_MAX_MS);
@@ -30,11 +32,23 @@ public class HumanBehaviorService {
     }
 
     public void waitForDomAndNetwork(Page page) {
-        logger.debug("🌐 Waiting for DOMCONTENTLOADED + NETWORKIDLE");
+        logger.debug("🌐 Waiting for DOM readiness + stable body element");
         page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-        page.waitForLoadState(LoadState.NETWORKIDLE);
         page.locator("body").first().waitFor(new Locator.WaitForOptions().setTimeout(10000));
-        logger.debug("✅ DOM and network ready");
+
+        // Best-effort wait: some sites keep long-lived network requests and never reach networkidle.
+        try {
+            page.waitForLoadState(
+                    LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(NETWORK_IDLE_BEST_EFFORT_TIMEOUT_MS)
+            );
+            logger.debug("✅ DOM, body and network idle ready");
+        } catch (PlaywrightException e) {
+            logger.debug("ℹ️ NETWORKIDLE not reached within {}ms, continuing: {}",
+                    (long) NETWORK_IDLE_BEST_EFFORT_TIMEOUT_MS,
+                    e.getMessage());
+            logger.debug("✅ DOM and body ready (network idle skipped)");
+        }
     }
 
     public void gradualScroll(Page page) {
@@ -60,4 +74,3 @@ public class HumanBehaviorService {
         logger.debug("🏁 Gradual scroll finished");
     }
 }
-
