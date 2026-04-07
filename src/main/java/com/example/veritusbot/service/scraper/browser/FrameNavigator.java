@@ -86,7 +86,10 @@ public class FrameNavigator {
         try {
             logger.debug("🔗 Clicking 'Search by Name' tab...");
             logger.debug("🔗 Waiting selector a:has-text('Nombre')");
-            frame.waitForSelector("a:has-text('Nombre')");
+            frame.waitForSelector(
+                    "a:has-text('Nombre')",
+                    new Frame.WaitForSelectorOptions().setTimeout(120000)
+            );
             humanBehaviorService.pauseInteraction(page);
             humanBehaviorService.pauseInteraction(page);
             frame.locator("a:has-text('Nombre')").click();
