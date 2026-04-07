@@ -13,17 +13,18 @@ public class RetryableScraperException extends Exception {
     private final boolean isRetryable;
     private final String context;  // e.g., "tribunal: Juzgado de Letras Civil" or "year: 2020"
     private final Integer failedTribunalPosition;
+    private final String failedTribunalName;  // exact name of the tribunal that failed
 
     /**
      * Create a retryable scraper exception
-     * 
+     *
      * @param message Human-readable error message
      * @param cause Original exception that caused this error
      * @param isRetryable Whether ScraperOrchestrator should retry this operation
      * @param context Additional context (tribunal name, year, etc.)
      */
     public RetryableScraperException(String message, Throwable cause, boolean isRetryable, String context) {
-        this(message, cause, isRetryable, context, null);
+        this(message, cause, isRetryable, context, null, null);
     }
 
     /**
@@ -40,10 +41,30 @@ public class RetryableScraperException extends Exception {
                                      boolean isRetryable,
                                      String context,
                                      Integer failedTribunalPosition) {
+        this(message, cause, isRetryable, context, failedTribunalPosition, null);
+    }
+
+    /**
+     * Create a retryable scraper exception with full tribunal context for name-based retry.
+     *
+     * @param message Human-readable error message
+     * @param cause Original exception that caused this error
+     * @param isRetryable Whether ScraperOrchestrator should retry this operation
+     * @param context Additional context (tribunal name, year, etc.)
+     * @param failedTribunalPosition zero-based tribunal position where failure occurred
+     * @param failedTribunalName exact name of the tribunal that failed (used for name-based retry)
+     */
+    public RetryableScraperException(String message,
+                                     Throwable cause,
+                                     boolean isRetryable,
+                                     String context,
+                                     Integer failedTribunalPosition,
+                                     String failedTribunalName) {
         super(message, cause);
         this.isRetryable = isRetryable;
         this.context = context;
         this.failedTribunalPosition = failedTribunalPosition;
+        this.failedTribunalName = failedTribunalName;
     }
 
     /**
@@ -92,6 +113,15 @@ public class RetryableScraperException extends Exception {
      */
     public Integer getFailedTribunalPosition() {
         return failedTribunalPosition;
+    }
+
+    /**
+     * @return exact name of the tribunal that failed, or null if not applicable.
+     *         Used by Phase scrapers to resolve the correct resume position by name on retry,
+     *         which is more robust than position-based resolution.
+     */
+    public String getFailedTribunalName() {
+        return failedTribunalName;
     }
 }
 

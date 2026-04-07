@@ -270,12 +270,14 @@ public class ScraperOrchestrator {
                     Thread.currentThread().setName(threadName);
                     logger.debug("▶️  [{}] Worker started for year {}", threadName, currentYear);
                     
-                    // ✅ RETRY LOGIC: Open new browser on each retry
+                    // ✅ RETRY LOGIC: Close browser and open fresh on each retry,
+                    //    resume from the EXACT failed tribunal (by name, then position as fallback)
                     int maxRetries = 5;
                     int retryCount = 0;
                     boolean success = false;
                     int resumeFromTribunalPosition = 0;
-                    
+                    String failedTribunalName = null;  // ✅ Tracks the exact tribunal that failed for name-based retry
+
                     while (retryCount < maxRetries && !success) {
                         if (Thread.currentThread().isInterrupted()) {
                             logger.warn("   ⏹️  [{}] Interrupted before attempt loop for year {}", Thread.currentThread().getName(), currentYear);
@@ -286,24 +288,27 @@ public class ScraperOrchestrator {
                         Page page = null;
                         
                         try {
-                            logger.info("   🔄 [{}] Starting year {} (Attempt {}/{})", 
-                                Thread.currentThread().getName(), 
+                            logger.info("   🔄 [{}] Starting year {} (Attempt {}/{}{})",
+                                Thread.currentThread().getName(),
                                 currentYear,
                                 retryCount,
-                                maxRetries);
-                            
-                            // ✅ Create FRESH browser for each attempt
+                                maxRetries,
+                                failedTribunalName != null ? " | retry tribunal: '" + failedTribunalName + "'" : "");
+
+                            // ✅ Create FRESH browser for each attempt (close-and-reopen on retry)
                             page = browserManager.launchBrowser(clientKey);
                             browserManager.navigateTo(page, pjudUrl);
                             
-                            // ✅ Execute phase for this year
-                            // NOTE: Phase1Scraper/Phase2Scraper throw RetryableScraperException on errors
+                            // ✅ Execute phase for this year.
+                            //    On retry: failedTribunalName drives name-based resume inside the phase
+                            //    (browser is reopened, form is re-filled, failed tribunal is selected by name).
                             List<ResultDTO> yearResults = phase.execute(
                                     page,
                                     person,
                                     currentYear,
                                     currentYear,
                                     resumeFromTribunalPosition,
+                                    failedTribunalName,
                                     new TribunalTrackingContext(personaProcesadaId, requestId, phaseCode));
                             personResults.addAll(yearResults);
                             
@@ -325,6 +330,14 @@ public class ScraperOrchestrator {
                                     resumeFromTribunalPosition);
                             }
 
+                            // ✅ Track the failed tribunal by name for the next retry attempt
+                            if (e.getFailedTribunalName() != null) {
+                                failedTribunalName = e.getFailedTribunalName();
+                                logger.debug("   🏷️  [{}] Failed tribunal name recorded: '{}'",
+                                    Thread.currentThread().getName(),
+                                    failedTribunalName);
+                            }
+
                             if (!e.isRetryable()) {
                                 logger.error("   ❌ [{}] Year {} FAILED (non-retryable): {}. Skipping to next year.",
                                     Thread.currentThread().getName(),
@@ -334,10 +347,11 @@ public class ScraperOrchestrator {
                             }
 
                             if (retryCount < maxRetries) {
-                                // ✅ Browser/Network error - Retry with new browser
-                                logger.warn("   ⚠️  [{}] Retryable error ({}). Retrying with new browser from tribunal position {}... (Attempt {}/{})",
+                                // ✅ Browser/Network error — close browser, reopen and retry from the failed tribunal
+                                logger.warn("   ⚠️  [{}] Retryable error ({}). Closing browser and retrying from tribunal '{}' (position {})... (Attempt {}/{})",
                                     Thread.currentThread().getName(),
                                     e.getContext(),
+                                    failedTribunalName != null ? failedTribunalName : "position-" + resumeFromTribunalPosition,
                                     resumeFromTribunalPosition,
                                     retryCount,
                                     maxRetries);
@@ -355,8 +369,8 @@ public class ScraperOrchestrator {
                                     logger.warn("   ⚠️  [{}] Retry wait interrupted", Thread.currentThread().getName());
                                     break;
                                 }
-                                // ↻ Loop continues, opens NEW browser
-                                
+                                // ↻ Loop continues: NEW browser opens, form re-filled, failed tribunal selected by name
+
                             } else {
                                 // ❌ Max retries reached
                                 logger.error("   ❌ [{}] Year {} FAILED (retries exceeded): {} (Attempt {}/{}). Skipping to next year.",

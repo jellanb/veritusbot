@@ -52,12 +52,12 @@ public class Phase1Scraper implements Phase {
         this.tribunalBusquedaService = tribunalBusquedaService;
     }
 
-    @Override
-    public List<ResultDTO> execute(Page page, PersonaDTO person, int startYear, int endYear, int startTribunalPosition)
-            throws RetryableScraperException {
-        return execute(page, person, startYear, endYear, startTribunalPosition, null);
-    }
-
+    /**
+     * PRIMARY execute implementation.
+     * On retry, {@code startTribunalName} is used to locate the failed tribunal by name in the
+     * freshly loaded list (more robust than position-based resume). Falls back to
+     * {@code startTribunalPosition} when the name is null or not found.
+     */
     @Override
     public List<ResultDTO> execute(
             Page page,
@@ -65,17 +65,19 @@ public class Phase1Scraper implements Phase {
             int startYear,
             int endYear,
             int startTribunalPosition,
+            String startTribunalName,
             TribunalTrackingContext trackingContext) throws RetryableScraperException {
         List<ResultDTO> results = new ArrayList<>();
 
         try {
             logger.info("▶️  Starting Phase 1 (Santiago tribunals 1-30)...");
-            logger.debug("🧾 Phase 1 input person={} {} {}, year={} resumeTribunal={} proxy={}",
+            logger.debug("🧾 Phase 1 input person={} {} {}, year={} resumePos={} resumeName={} proxy={}",
                     person.getNombres(),
                     person.getApellidoPaterno(),
                     person.getApellidoMaterno(),
                     startYear,
                     startTribunalPosition,
+                    startTribunalName,
                     browserManager.getProxyLabel(page));
 
             // Navigate to search form
@@ -115,13 +117,17 @@ public class Phase1Scraper implements Phase {
                 return results;
             }
 
-            int resumePosition = Math.max(0, startTribunalPosition);
+            // Resolve resume position: name-based (on retry) is preferred over position-based
+            int resumePosition = resolveResumePosition(santiagoTribunals, startTribunalPosition, startTribunalName);
             if (resumePosition >= santiagoTribunals.size()) {
                 logger.warn("⚠ Resume position {} is out of range for {} tribunals", resumePosition, santiagoTribunals.size());
                 return results;
             }
 
-            logger.info("📋 Phase 1: Found {} Santiago tribunals (resume from position {})", santiagoTribunals.size(), resumePosition);
+            logger.info("📋 Phase 1: Found {} Santiago tribunals (resume from position {}{})",
+                    santiagoTribunals.size(),
+                    resumePosition,
+                    startTribunalName != null ? " [retry tribunal: '" + startTribunalName + "']" : "");
 
             // Search in each Santiago tribunal
             for (int tribunalPosition = resumePosition; tribunalPosition < santiagoTribunals.size(); tribunalPosition++) {
@@ -165,7 +171,7 @@ public class Phase1Scraper implements Phase {
 
                     if (!tribunalResults.isEmpty()) {
                         logger.debug("✅ Found {} results in {}", tribunalResults.size(), tribunalName);
-                        
+
                         // ✅ PERSIST IMMEDIATELY WHEN FOUND (not at the end)
                         logger.debug("💾 Persisting {} results found in tribunal: {}", tribunalResults.size(), tribunalName);
                         resultPersistenceService.saveResults(tribunalResults, person);
@@ -179,18 +185,19 @@ public class Phase1Scraper implements Phase {
                     // ✅ Throw exception with context for ScraperOrchestrator to handle retries
                     String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     logger.error("❌ Error searching tribunal {}: {}", tribunalName, errorMsg);
-                    
+
                     // If it's a browser/network error, let ScraperOrchestrator know to retry
                     // Otherwise, log and continue to next tribunal
                     if (RetryableScraperException.isBrowserOrNetworkError(e)) {
                         markTribunalWithError(trackingContext, tribunalName, startYear,
                                 "ERROR_CONEXION: " + errorMsg);
-                        throw new com.example.veritusbot.service.scraper.retry.RetryableScraperException(
-                            "Browser/Network error while searching tribunal: " + tribunalName,
-                            e,
-                            true,  // isRetryable
-                            "tribunal: " + tribunalName,
-                            tribunalPosition
+                        throw new RetryableScraperException(
+                                "Browser/Network error while searching tribunal: " + tribunalName,
+                                e,
+                                true,           // isRetryable
+                                "tribunal: " + tribunalName,
+                                tribunalPosition,
+                                tribunalName    // ✅ Include tribunal name for name-based retry
                         );
                     } else {
                         markTribunalWithError(trackingContext, tribunalName, startYear,
@@ -208,6 +215,36 @@ public class Phase1Scraper implements Phase {
         }
 
         return results;
+    }
+
+    /**
+     * Resolve the position to start (or resume) the tribunal loop from.
+     *
+     * On retry, {@code nameHint} is the exact name of the failed tribunal.
+     * Searching by name is more robust than by position because the loaded list order
+     * could theoretically differ between attempts.
+     * Falls back to {@code positionHint} when the name is null or not found in the list.
+     *
+     * @param tribunals    filtered, sorted tribunal list for this phase
+     * @param positionHint zero-based position hint (from {@code startTribunalPosition})
+     * @param nameHint     exact tribunal name to locate (may be null on fresh start)
+     * @return resolved zero-based position to start the loop from
+     */
+    private int resolveResumePosition(
+            List<Map.Entry<String, Integer>> tribunals,
+            int positionHint,
+            String nameHint) {
+        if (nameHint != null && !nameHint.isBlank()) {
+            for (int i = 0; i < tribunals.size(); i++) {
+                if (tribunals.get(i).getKey().equals(nameHint)) {
+                    logger.info("🎯 [Retry] Tribunal '{}' resolved to position {} by name", nameHint, i);
+                    return i;
+                }
+            }
+            logger.warn("⚠ [Retry] Tribunal '{}' not found by name in loaded list, falling back to position {}",
+                    nameHint, positionHint);
+        }
+        return Math.max(0, positionHint);
     }
 
     /**
@@ -292,6 +329,8 @@ public class Phase1Scraper implements Phase {
         return "Phase 1: Santiago Tribunals (1-30)";
     }
 }
+
+
 
 
 
