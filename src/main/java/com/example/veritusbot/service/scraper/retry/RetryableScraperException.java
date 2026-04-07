@@ -1,5 +1,8 @@
 package com.example.veritusbot.service.scraper.retry;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Exception thrown by Phase scrapers when an error occurs.
  * ScraperOrchestrator uses this to determine if the operation should be retried.
@@ -78,10 +81,28 @@ public class RetryableScraperException extends Exception {
      * @return true if the error is browser/network related and should be retried
      */
     public static boolean isBrowserOrNetworkError(Throwable cause) {
-        if (cause == null) return false;
-        
+        Set<Throwable> visited = new HashSet<>();
+        Throwable current = cause;
+
+        while (current != null && visited.add(current)) {
+            if (isKnownRetryableThrowable(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+
+        return false;
+    }
+
+    private static boolean isKnownRetryableThrowable(Throwable cause) {
+        if (cause == null) {
+            return false;
+        }
+
         String message = cause.getMessage() != null ? cause.getMessage() : "";
-        
+        String simpleName = cause.getClass().getSimpleName();
+        String className = cause.getClass().getName();
+
         return message.contains("Target page, context or browser has been closed") ||
                message.contains("Target closed") ||
                message.contains("Browser closed") ||
@@ -90,7 +111,10 @@ public class RetryableScraperException extends Exception {
                message.contains("WebSocket is closed") ||
                message.contains("ERR_FAILED") ||
                message.contains("net::ERR") ||
-               cause.getClass().getSimpleName().contains("PlaywrightException") ||
+               message.contains("waiting for locator(") ||
+               simpleName.contains("PlaywrightException") ||
+               simpleName.contains("TimeoutError") ||
+               className.startsWith("com.microsoft.playwright.") ||
                cause instanceof java.io.IOException;
     }
 

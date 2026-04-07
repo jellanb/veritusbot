@@ -2,6 +2,7 @@ package com.example.veritusbot.service.scraper.form;
 
 import com.example.veritusbot.dto.PersonaDTO;
 import com.example.veritusbot.service.scraper.browser.HumanBehaviorService;
+import com.example.veritusbot.service.scraper.config.ScraperConfig;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import org.slf4j.Logger;
@@ -71,18 +72,18 @@ public class FormFiller {
     public void submitForm(Frame frame) {
         try {
             logger.debug("🔍 Submitting search form...");
-            Locator submitButton = frame.locator("#btnConConsultaNom");
+            Locator submitButton = frame.locator(ScraperConfig.SUBMIT_BUTTON_SELECTOR);
             logger.debug("🔍 Submit button count: {}", submitButton.count());
             if (submitButton.count() > 0) {
                 humanBehaviorService.pauseInteraction(frame.page());
                 submitButton.click();
                 logger.debug("✓ Form submitted successfully");
             } else {
-                logger.warn("⚠ Submit button not found");
+                logger.warn("⚠ Submit button not found using selector {}", ScraperConfig.SUBMIT_BUTTON_SELECTOR);
             }
         } catch (Exception e) {
-            logger.error("❌ Error submitting form: ", e);
-            throw new RuntimeException("Failed to submit form", e);
+            logger.error("❌ Error submitting form with selector {}: ", ScraperConfig.SUBMIT_BUTTON_SELECTOR, e);
+            throw new RuntimeException("Failed to submit form using selector " + ScraperConfig.SUBMIT_BUTTON_SELECTOR, e);
         }
     }
 
