@@ -29,16 +29,16 @@ public class FormFiller {
             logger.debug("📝 Filling search form for: {} (year: {})", person.getNombres(), year);
 
             humanBehaviorService.pauseInteraction(frame.page());
-            frame.fill("input[name='nomNombre']", person.getNombres());
+            humanBehaviorService.typeFieldWithDelay(frame, "input[name='nomNombre']", person.getNombres());
             logger.debug("📝 Field nomNombre filled");
             humanBehaviorService.pauseInteraction(frame.page());
-            frame.fill("input[name='nomApePaterno']", person.getApellidoPaterno());
+            humanBehaviorService.typeFieldWithDelay(frame, "input[name='nomApePaterno']", person.getApellidoPaterno());
             logger.debug("📝 Field nomApePaterno filled");
             humanBehaviorService.pauseInteraction(frame.page());
-            frame.fill("input[name='nomApeMaterno']", person.getApellidoMaterno());
+            humanBehaviorService.typeFieldWithDelay(frame, "input[name='nomApeMaterno']", person.getApellidoMaterno());
             logger.debug("📝 Field nomApeMaterno filled");
             humanBehaviorService.pauseInteraction(frame.page());
-            frame.fill("input[id='nomEra']", String.valueOf(year));
+            humanBehaviorService.typeFieldWithDelay(frame, "input[id='nomEra']", String.valueOf(year));
             logger.debug("📝 Field nomEra filled with year {}", year);
 
             logger.debug("✓ Form filled successfully");
@@ -57,7 +57,7 @@ public class FormFiller {
         try {
             logger.debug("📝 Filling tribunal field: {}", tribunalName);
             humanBehaviorService.pauseInteraction(frame.page());
-            frame.fill("input[name='nomTribunal']", tribunalName);
+            humanBehaviorService.typeFieldWithDelay(frame, "input[name='nomTribunal']", tribunalName);
             logger.debug("✓ Tribunal field filled");
         } catch (Exception e) {
             logger.error("❌ Error filling tribunal field: ", e);

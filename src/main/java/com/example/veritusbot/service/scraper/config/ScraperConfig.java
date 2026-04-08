@@ -16,13 +16,15 @@ public class ScraperConfig {
     // URLs
     public static final String PJUD_HOME_URL = "https://oficinajudicialvirtual.pjud.cl/home/index.php";
 
-    // Browser fingerprint aligned with requests originating from Canada
-    public static final String BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-    public static final String BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-    public static final String BROWSER_ACCEPT_LANGUAGE = "en-CA,en;q=0.9";
-    public static final String BROWSER_LOCALE = "en-CA";
+    // Browser fingerprint aligned with Chilean locale (es-CL)
+    public static final String BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+    public static final String BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
+    public static final String BROWSER_ACCEPT_LANGUAGE = "es-CL,es;q=0.9";
+    public static final String BROWSER_LOCALE = "es-CL";
     public static final String BROWSER_TIMEZONE = "America/Toronto";
     public static final String BROWSER_PLATFORM = "Win32";
+    public static final String SEC_CH_UA = "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not-A.Brand\";v=\"99\"";
+    public static final String SEC_CH_UA_PLATFORM = "\"Windows\"";
     public static final int BROWSER_VIEWPORT_WIDTH = 1366;
     public static final int BROWSER_VIEWPORT_HEIGHT = 768;
 
