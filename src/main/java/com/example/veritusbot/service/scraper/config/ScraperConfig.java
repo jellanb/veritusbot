@@ -21,7 +21,7 @@ public class ScraperConfig {
     public static final String BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
     public static final String BROWSER_ACCEPT_LANGUAGE = "es-CL,es;q=0.9";
     public static final String BROWSER_LOCALE = "es-CL";
-    public static final String BROWSER_TIMEZONE = "America/Santiago";
+    public static final String BROWSER_TIMEZONE = "America/Toronto";
     public static final String BROWSER_PLATFORM = "Win32";
     public static final String SEC_CH_UA = "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not-A.Brand\";v=\"99\"";
     public static final String SEC_CH_UA_PLATFORM = "\"Windows\"";
