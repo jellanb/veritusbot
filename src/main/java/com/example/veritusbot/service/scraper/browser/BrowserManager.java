@@ -70,7 +70,8 @@ public class BrowserManager {
             ProxySelectorService.ProxyConfig selectedProxy = proxySelectorService.acquireExclusiveProxyOrNull();
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
                     .setHeadless(headlessBrowser)
-                    .setTimeout(90000);
+                    .setTimeout(90000)
+                    .setArgs(java.util.List.of("--disable-blink-features=AutomationControlled"));
 
             if (selectedProxy != null) {
                 leasedProxyServer = selectedProxy.server();
@@ -97,7 +98,11 @@ public class BrowserManager {
                     .setViewportSize(ScraperConfig.BROWSER_VIEWPORT_WIDTH, ScraperConfig.BROWSER_VIEWPORT_HEIGHT)
                     .setExtraHTTPHeaders(Map.of(
                             "Accept", ScraperConfig.BROWSER_ACCEPT,
-                            "Accept-Language", ScraperConfig.BROWSER_ACCEPT_LANGUAGE
+                            "Accept-Language", ScraperConfig.BROWSER_ACCEPT_LANGUAGE,
+                            "Sec-Ch-Ua", ScraperConfig.SEC_CH_UA,
+                            "Sec-Ch-Ua-Mobile", "?0",
+                            "Sec-Ch-Ua-Platform", ScraperConfig.SEC_CH_UA_PLATFORM,
+                            "Upgrade-Insecure-Requests", "1"
                     ));
 
             if (Files.exists(sessionPath)) {
@@ -109,6 +114,26 @@ public class BrowserManager {
 
             context = browser.newContext(contextOptions);
             context.addInitScript("Object.defineProperty(navigator, 'platform', { get: () => '" + ScraperConfig.BROWSER_PLATFORM + "' });");
+            context.addInitScript("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });");
+            context.addInitScript(
+                "window.chrome = { runtime: { onMessage: { addListener: function() {}, removeListener: function() {} }, sendMessage: function() {}, id: '' } };"
+            );
+            context.addInitScript(
+                "Object.defineProperty(navigator, 'plugins', { get: () => [" +
+                "  { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 }," +
+                "  { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1 }," +
+                "  { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 2 }" +
+                "] });"
+            );
+            context.addInitScript(
+                "Object.defineProperty(navigator, 'languages', { get: () => ['es-CL', 'es'] });"
+            );
+            context.addInitScript(
+                "const originalQuery = window.Notification && window.Notification.requestPermission;" +
+                "if (window.Notification) {" +
+                "  window.Notification.requestPermission = function() { return Promise.resolve('default'); };" +
+                "}"
+            );
             resourceCleanupManager.registerBrowserContext(context);
 
             Page page = context.newPage();

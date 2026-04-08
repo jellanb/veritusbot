@@ -1,6 +1,7 @@
 package com.example.veritusbot.service.scraper.browser;
 
 import com.example.veritusbot.service.scraper.config.ScraperConfig;
+import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.PlaywrightException;
@@ -49,6 +50,24 @@ public class HumanBehaviorService {
                     e.getMessage());
             logger.debug("✅ DOM and body ready (network idle skipped)");
         }
+    }
+
+    /**
+     * Type text into a form field character by character with random delays to simulate human typing.
+     * @param frame Target frame containing the field
+     * @param selector CSS selector for the input field
+     * @param text Text to type
+     */
+    public void typeFieldWithDelay(Frame frame, String selector, String text) {
+        logger.debug("⌨️  Typing into '{}' with human delays ({} chars)", selector, text.length());
+        frame.locator(selector).click();
+        frame.locator(selector).fill("");
+        for (char c : text.toCharArray()) {
+            frame.locator(selector).type(String.valueOf(c));
+            int delay = ThreadLocalRandom.current().nextInt(60, 201);
+            frame.page().waitForTimeout(delay);
+        }
+        logger.debug("⌨️  Finished typing into '{}'", selector);
     }
 
     public void gradualScroll(Page page) {
