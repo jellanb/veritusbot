@@ -7,12 +7,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -21,6 +19,7 @@ public class ProxySelectorService {
     private static final Logger logger = LoggerFactory.getLogger(ProxySelectorService.class);
     private static final Duration DEFAULT_WAIT_TIMEOUT = Duration.ofSeconds(30);
 
+    private final AtomicInteger nextProxyIndex = new AtomicInteger(0);
     private final ProxiSettingService proxiSettingService;
 
     private final ReentrantLock lock = new ReentrantLock();
@@ -43,9 +42,9 @@ public class ProxySelectorService {
             return null;
         }
 
-        int selectedIndex = ThreadLocalRandom.current().nextInt(activos.size());
+        int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), activos.size());
         ProxiSetting selected = activos.get(selectedIndex);
-        logger.debug("🌍 Randomly selected proxy index {} -> {}", selectedIndex, selected.getServer());
+        logger.debug("🌍 Selected proxy index {} -> {}", selectedIndex, selected.getServer());
         return toProxyConfig(selected);
     }
 
@@ -111,13 +110,12 @@ public class ProxySelectorService {
     }
 
     private ProxyConfig tryAcquireFrom(List<ProxiSetting> activos) {
-        // Shuffle a copy of the list so each attempt tries proxies in a random order
-        List<ProxiSetting> shuffled = new ArrayList<>(activos);
-        Collections.shuffle(shuffled, ThreadLocalRandom.current());
-        for (ProxiSetting candidate : shuffled) {
-            ProxyConfig config = toProxyConfig(candidate);
-            if (leasedProxyServers.add(config.server())) {
-                return config;
+        int size = activos.size();
+        for (int i = 0; i < size; i++) {
+            int selectedIndex = Math.floorMod(nextProxyIndex.getAndIncrement(), size);
+            ProxyConfig candidate = toProxyConfig(activos.get(selectedIndex));
+            if (leasedProxyServers.add(candidate.server())) {
+                return candidate;
             }
         }
         return null;
