@@ -17,12 +17,24 @@ public class FrameNavigator {
 
     /**
      * Navigate to the search form section
+     *
      * @param page Current page
      */
     public void navigateToSearchForm(Page page) {
         try {
             logger.debug("📍 Navigating to search form...");
             humanBehaviorService.pauseInteraction(page);
+            try {
+                page.waitForFunction(
+                        "typeof accesoConsultaCausas === 'function'",
+                        null,
+                        new Page.WaitForFunctionOptions().setTimeout(90000)
+                );
+            } catch (Exception waitEx) {
+                logger.error("❌ accesoConsultaCausas not available. Current URL: {}, Title: {}",
+                        page.url(), page.title());
+                throw waitEx;
+            }
             page.evaluate("accesoConsultaCausas()");
             humanBehaviorService.waitForDomAndNetwork(page);
             humanBehaviorService.pauseShort(page);
@@ -35,6 +47,7 @@ public class FrameNavigator {
 
     /**
      * Get the main iframe containing the search form
+     *
      * @param page Current page
      * @return Frame instance
      */
@@ -58,9 +71,9 @@ public class FrameNavigator {
             if (frame == null) {
                 logger.debug("🔎 Frame by name not found, trying URL strategy");
                 frame = page.frames().stream()
-                    .filter(f -> f.url().contains("pjud"))
-                    .findFirst()
-                    .orElse(null);
+                        .filter(f -> f.url().contains("pjud"))
+                        .findFirst()
+                        .orElse(null);
             }
 
             if (frame == null) {
@@ -79,8 +92,9 @@ public class FrameNavigator {
 
     /**
      * Click on the "Search by Name" tab
+     *
      * @param frame Target frame
-     * @param page Current page
+     * @param page  Current page
      */
     public void clickSearchByNameTab(Frame frame, Page page) {
         try {
@@ -103,8 +117,9 @@ public class FrameNavigator {
 
     /**
      * Set competence to Civil (value: 3)
+     *
      * @param frame Target frame
-     * @param page Current page
+     * @param page  Current page
      */
     public void setCompetenceToCivil(Frame frame, Page page) {
         try {
