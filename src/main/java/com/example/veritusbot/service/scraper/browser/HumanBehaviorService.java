@@ -17,43 +17,13 @@ public class HumanBehaviorService {
     private static final Logger logger = LoggerFactory.getLogger(HumanBehaviorService.class);
     private static final double NETWORK_IDLE_BEST_EFFORT_TIMEOUT_MS = 5000;
 
-    // 5% chance of a long "distracted" pause (4–12 seconds) on each pauseShort call
-    private static final double DISTRACTION_PROBABILITY = 0.05;
-    private static final int DISTRACTION_MIN_MS = 4000;
-    private static final int DISTRACTION_MAX_MS = 12000;
-
     public void pauseShort(Page page) {
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
-
-        // Occasionally simulate the user getting distracted
-        if (rng.nextDouble() < DISTRACTION_PROBABILITY) {
-            int distractionDelay = rng.nextInt(DISTRACTION_MIN_MS, DISTRACTION_MAX_MS + 1);
-            logger.debug("⏸️  Distraction pause: {}ms", distractionDelay);
-            page.waitForTimeout(distractionDelay);
-            return;
-        }
-
-        // Non-uniform distribution: bias toward shorter pauses but allow occasional longer ones
-        // ~70% fast (min..mid), ~30% slow (mid..max)
-        int mid = (ScraperConfig.HUMAN_PAUSE_MIN_MS + ScraperConfig.HUMAN_PAUSE_MAX_MS) / 2;
-        int delay;
-        if (rng.nextDouble() < 0.70) {
-            delay = rng.nextInt(ScraperConfig.HUMAN_PAUSE_MIN_MS, Math.max(ScraperConfig.HUMAN_PAUSE_MIN_MS + 1, mid + 1));
-        } else {
-            delay = rng.nextInt(mid, Math.max(mid + 1, ScraperConfig.HUMAN_PAUSE_MAX_MS + 1));
-        }
-        logger.debug("⏳ Human pause: {}ms (range {}-{})", delay, ScraperConfig.HUMAN_PAUSE_MIN_MS, ScraperConfig.HUMAN_PAUSE_MAX_MS);
-        page.waitForTimeout(delay);
+        pause(page, ScraperConfig.HUMAN_PAUSE_MIN_MS, ScraperConfig.HUMAN_PAUSE_MAX_MS);
     }
 
     public void pauseInteraction(Page page) {
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
-        // Add ±30% jitter to interaction pause to avoid fixed-interval fingerprinting
-        int base = ScraperConfig.HUMAN_INTERACTION_EXTRA_MS;
-        int jitter = (int) (base * 0.30);
-        int delay = base + rng.nextInt(-jitter, jitter + 1);
-        logger.debug("⏸️  Interaction pause: {}ms", delay);
-        page.waitForTimeout(delay);
+        logger.debug("⏸️  Interaction pause: {}ms", ScraperConfig.HUMAN_INTERACTION_EXTRA_MS);
+        page.waitForTimeout(ScraperConfig.HUMAN_INTERACTION_EXTRA_MS);
     }
 
     public void pause(Page page, int minMs, int maxMs) {

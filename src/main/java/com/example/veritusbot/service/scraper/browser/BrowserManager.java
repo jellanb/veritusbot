@@ -96,18 +96,13 @@ public class BrowserManager {
                     .setLocale(ScraperConfig.BROWSER_LOCALE)
                     .setTimezoneId(ScraperConfig.BROWSER_TIMEZONE)
                     .setViewportSize(ScraperConfig.BROWSER_VIEWPORT_WIDTH, ScraperConfig.BROWSER_VIEWPORT_HEIGHT)
-                    .setExtraHTTPHeaders(Map.ofEntries(
-                            Map.entry("Accept", ScraperConfig.BROWSER_ACCEPT),
-                            Map.entry("Accept-Language", ScraperConfig.BROWSER_ACCEPT_LANGUAGE),
-                            Map.entry("Sec-Ch-Ua", ScraperConfig.SEC_CH_UA),
-                            Map.entry("Sec-Ch-Ua-Mobile", "?0"),
-                            Map.entry("Sec-Ch-Ua-Platform", ScraperConfig.SEC_CH_UA_PLATFORM),
-                            Map.entry("Upgrade-Insecure-Requests", "1"),
-                            Map.entry("Sec-Fetch-Site", "none"),
-                            Map.entry("Sec-Fetch-Mode", "navigate"),
-                            Map.entry("Sec-Fetch-Dest", "document"),
-                            Map.entry("Sec-Fetch-User", "?1"),
-                            Map.entry("Accept-Encoding", "gzip, deflate, br")
+                    .setExtraHTTPHeaders(Map.of(
+                            "Accept", ScraperConfig.BROWSER_ACCEPT,
+                            "Accept-Language", ScraperConfig.BROWSER_ACCEPT_LANGUAGE,
+                            "Sec-Ch-Ua", ScraperConfig.SEC_CH_UA,
+                            "Sec-Ch-Ua-Mobile", "?0",
+                            "Sec-Ch-Ua-Platform", ScraperConfig.SEC_CH_UA_PLATFORM,
+                            "Upgrade-Insecure-Requests", "1"
                     ));
 
             if (Files.exists(sessionPath)) {
