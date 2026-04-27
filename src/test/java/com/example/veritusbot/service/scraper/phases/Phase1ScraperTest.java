@@ -80,7 +80,7 @@ class Phase1ScraperTest {
         tribunals.put("Corte de Apelaciones de Valparaiso", 20);
         when(tribunalSelector.loadAllTribunals(frame)).thenReturn(tribunals);
 
-        doNothing().when(frameNavigator).navigateToSearchForm(page);
+        doNothing().when(frameNavigator).openConsultaUnificada(page);
         doNothing().when(frameNavigator).clickSearchByNameTab(frame, page);
         doNothing().when(frameNavigator).setCompetenceToCivil(frame, page);
         doNothing().when(formFiller).fillSearchForm(frame, person, 2023);

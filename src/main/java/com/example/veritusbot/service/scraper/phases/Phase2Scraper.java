@@ -82,8 +82,11 @@ public class Phase2Scraper implements Phase {
                     startTribunalName,
                     browserManager.getProxyLabel(page));
 
-            // Navigate to search form
-            frameNavigator.navigateToSearchForm(page);
+            // Login with Clave Única before navigating to search form
+            frameNavigator.loginWithClaveUnica(page);
+
+            // Open "Consulta Unificada" from the left menu before the search form
+            frameNavigator.openConsultaUnificada(page);
 
             // Get search frame
             Frame searchFrame = frameNavigator.getSearchFrame(page);

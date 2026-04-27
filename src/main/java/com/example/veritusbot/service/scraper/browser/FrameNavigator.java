@@ -4,6 +4,7 @@ import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -11,37 +12,102 @@ public class FrameNavigator {
     private static final Logger logger = LoggerFactory.getLogger(FrameNavigator.class);
     private final HumanBehaviorService humanBehaviorService;
 
+    @Value("${app.claveunica.run}")
+    private String claveUnicaRun;
+
+    @Value("${app.claveunica.password}")
+    private String claveUnicaPassword;
+
     public FrameNavigator(HumanBehaviorService humanBehaviorService) {
         this.humanBehaviorService = humanBehaviorService;
     }
 
     /**
-     * Navigate to the search form section
+     * Hover over "Todos los servicios" button and click "Clave Única" to authenticate
      *
      * @param page Current page
      */
-    public void navigateToSearchForm(Page page) {
+    public void loginWithClaveUnica(Page page) {
         try {
-            logger.debug("📍 Navigating to search form...");
+            logger.debug("🔐 Hovering over 'Todos los servicios' button...");
+            page.hover("button.dropbtn");
+            humanBehaviorService.pauseShort(page);
+
+            logger.debug("🔐 Clicking 'Clave Única'...");
+            page.click("a[onclick*='AutenticaCUnica']");
+            humanBehaviorService.waitForDomAndNetwork(page);
+
+            logger.debug("🔐 Waiting for Clave Única login form...");
+            page.waitForSelector("#uname", new Page.WaitForSelectorOptions().setTimeout(30000));
+            humanBehaviorService.pauseShort(page);
+
+            logger.debug("🔐 Filling RUN field...");
+            humanBehaviorService.typeFieldWithDelay(page.mainFrame(), "#uname", claveUnicaRun);
+            humanBehaviorService.pauseShort(page);
+
+            logger.debug("🔐 Filling password field...");
+            humanBehaviorService.typeFieldWithDelay(page.mainFrame(), "#pword", claveUnicaPassword);
+            humanBehaviorService.pauseShort(page);
+
+            logger.debug("🔐 Waiting for INGRESA button to be enabled...");
+            page.waitForFunction(
+                "!document.querySelector('#login-submit').disabled",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000)
+            );
+            humanBehaviorService.pauseShort(page);
+
+            logger.debug("🔐 Clicking INGRESA button...");
+            page.click("#login-submit");
+            humanBehaviorService.waitForDomAndNetwork(page);
+
+            logger.debug("✓ Clave Única login submitted");
+        } catch (Exception e) {
+            logger.error("❌ Error during Clave Única login: ", e);
+            throw new RuntimeException("Failed to login with Clave Única", e);
+        }
+    }
+
+    /**
+     * Open the "Consulta Unificada" section from the left-side menu.
+     *
+     * <p>This replaces the previous direct call to {@code accesoConsultaCausas()}.
+     * The target element is the anchor rendered in the left menu:
+     * <pre>{@code <a href="#" onclick="consultaUnificada();">...Consulta Unificada</a>}</pre>
+     *
+     * <p>We click the anchor (instead of evaluating the JS function directly) to
+     * keep the interaction human-like and to trigger the native onclick handler
+     * registered by the page.
+     *
+     * @param page Current page (already authenticated via Clave Única)
+     */
+    public void openConsultaUnificada(Page page) {
+        try {
+            logger.debug("📍 Opening 'Consulta Unificada' from left menu...");
             humanBehaviorService.pauseInteraction(page);
+
+            // Wait for the anchor in the left menu to be attached to the DOM
+            String consultaUnificadaSelector = "a[onclick*='consultaUnificada']";
             try {
-                page.waitForFunction(
-                        "typeof accesoConsultaCausas === 'function'",
-                        null,
-                        new Page.WaitForFunctionOptions().setTimeout(90000)
+                page.waitForSelector(
+                        consultaUnificadaSelector,
+                        new Page.WaitForSelectorOptions().setTimeout(90000)
                 );
             } catch (Exception waitEx) {
-                logger.error("❌ accesoConsultaCausas not available. Current URL: {}, Title: {}",
+                logger.error("❌ 'Consulta Unificada' link not available. Current URL: {}, Title: {}",
                         page.url(), page.title());
                 throw waitEx;
             }
-            page.evaluate("accesoConsultaCausas()");
+
+            // Click the link — onclick="consultaUnificada();" will fire naturally
+            page.click(consultaUnificadaSelector);
             humanBehaviorService.waitForDomAndNetwork(page);
             humanBehaviorService.pauseShort(page);
-            logger.debug("✓ Navigated to search form");
+
+            logger.debug("✓ 'Consulta Unificada' opened");
         } catch (Exception e) {
-            logger.error("❌ Error navigating to search form: ", e);
-            throw new RuntimeException("Failed to navigate to search form", e);
+            logger.error("❌ Error opening 'Consulta Unificada': ", e);
+            throw new RuntimeException("Failed to open 'Consulta Unificada'", e);
         }
     }
 
