@@ -38,7 +38,7 @@ public class FrameNavigator {
             humanBehaviorService.waitForDomAndNetwork(page);
 
             logger.debug("🔐 Waiting for Clave Única login form...");
-            page.waitForSelector("#uname", new Page.WaitForSelectorOptions().setTimeout(30000));
+            page.waitForSelector("#uname", new Page.WaitForSelectorOptions().setTimeout(60000));
             humanBehaviorService.pauseShort(page);
 
             logger.debug("🔐 Filling RUN field...");
