@@ -1,9 +1,9 @@
 package com.example.veritusbot.service.scraper.browser;
 
 import com.microsoft.playwright.Frame;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.options.LoadState;
-import com.microsoft.playwright.options.WaitUntilState;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class FrameNavigator {
     private static final Logger logger = LoggerFactory.getLogger(FrameNavigator.class);
+    private static final String CLAVE_UNICA_MENU_SELECTOR = "a[onclick*='AutenticaCUnica']";
+    private static final String CLAVE_UNICA_USER_SELECTOR = "#uname";
+    private static final String CLAVE_UNICA_PASSWORD_SELECTOR = "#pword";
+    private static final String CLAVE_UNICA_SUBMIT_SELECTOR = "#login-submit";
     private final HumanBehaviorService humanBehaviorService;
 
     @Value("${app.claveunica.run}")
@@ -19,6 +23,9 @@ public class FrameNavigator {
 
     @Value("${app.claveunica.password}")
     private String claveUnicaPassword;
+
+    @Value("${app.scraper.claveunica.form-timeout-ms:90000}")
+    private int claveUnicaFormTimeoutMs;
 
     public FrameNavigator(HumanBehaviorService humanBehaviorService) {
         this.humanBehaviorService = humanBehaviorService;
@@ -30,63 +37,117 @@ public class FrameNavigator {
      * @param page Current page
      */
     public void loginWithClaveUnica(Page page) {
-        // Intercept responses to detect non-200 status from Clave Única
-        page.onResponse(response -> {
-            if (response.url().contains("claveunica.gob.cl") && response.status() != 200) {
-                logger.error("🚨 Clave Única response: HTTP {} for URL: {}", response.status(), response.url());
-            }
-        });
-
         try {
-            logger.debug("🔐 Hovering over 'Todos los servicios' button...");
-            page.hover("button.dropbtn");
-            humanBehaviorService.pauseShort(page);
-
-            logger.debug("🔐 Clicking 'Clave Única' (URL: {})...", page.url());
-            page.waitForNavigation(
-                new Page.WaitForNavigationOptions()
-                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
-                    .setTimeout(30000),
-                () -> page.click("a[onclick*='AutenticaCUnica']")
-            );
-            logger.error("🔐 Navigated to: {} | Title: {}", page.url(), page.title());
-            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(30000));
+            clickClaveUnicaEntry(page);
+            humanBehaviorService.waitForDomAndNetwork(page);
 
             logger.debug("🔐 Waiting for Clave Única login form (URL: {})...", page.url());
-            page.waitForSelector("#uname", new Page.WaitForSelectorOptions().setTimeout(60000));
+            Frame loginFrame = waitForClaveUnicaLoginFrame(page, claveUnicaFormTimeoutMs);
             humanBehaviorService.pauseShort(page);
 
             logger.debug("🔐 Filling RUN field...");
-            humanBehaviorService.typeFieldWithDelay(page.mainFrame(), "#uname", claveUnicaRun);
+            humanBehaviorService.typeFieldWithDelay(loginFrame, CLAVE_UNICA_USER_SELECTOR, claveUnicaRun);
             humanBehaviorService.pauseShort(page);
 
             logger.debug("🔐 Filling password field...");
-            humanBehaviorService.typeFieldWithDelay(page.mainFrame(), "#pword", claveUnicaPassword);
+            humanBehaviorService.typeFieldWithDelay(loginFrame, CLAVE_UNICA_PASSWORD_SELECTOR, claveUnicaPassword);
             humanBehaviorService.pauseShort(page);
 
             logger.debug("🔐 Waiting for INGRESA button to be enabled...");
-            page.waitForFunction(
-                "!document.querySelector('#login-submit').disabled",
+            loginFrame.waitForFunction(
+                "() => { const btn = document.querySelector('#login-submit'); return !!btn && !btn.disabled; }",
                 null,
-                new Page.WaitForFunctionOptions().setTimeout(15000)
+                new Frame.WaitForFunctionOptions().setTimeout(30000)
             );
             humanBehaviorService.pauseShort(page);
 
             logger.debug("🔐 Clicking INGRESA button (URL: {})...", page.url());
-            page.waitForNavigation(
-                new Page.WaitForNavigationOptions()
-                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
-                    .setTimeout(30000),
-                () -> page.click("#login-submit")
-            );
-            logger.debug("🔐 Post-login navigated to: {}", page.url());
-            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(30000));
+            loginFrame.locator(CLAVE_UNICA_SUBMIT_SELECTOR).first().click(new Locator.ClickOptions().setTimeout(15000));
+            humanBehaviorService.waitForDomAndNetwork(page);
+            logger.debug("🔐 Post-login current URL: {}", page.url());
 
             logger.debug("✓ Clave Única login submitted");
         } catch (Exception e) {
             logger.error("❌ Error during Clave Única login: ", e);
             throw new RuntimeException("Failed to login with Clave Única", e);
         }
+    }
+
+    private void clickClaveUnicaEntry(Page page) {
+        RuntimeException lastError = null;
+
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                logger.debug("🔐 Hovering over 'Todos los servicios' button (attempt {}/2)...", attempt);
+                page.hover("button.dropbtn");
+                humanBehaviorService.pauseShort(page);
+
+                page.waitForSelector(
+                        CLAVE_UNICA_MENU_SELECTOR,
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.VISIBLE)
+                                .setTimeout(15000)
+                );
+                page.locator(CLAVE_UNICA_MENU_SELECTOR).first().click(new Locator.ClickOptions().setTimeout(15000));
+                return;
+            } catch (Exception e) {
+                lastError = new RuntimeException("Failed to click Clave Única entry", e);
+                logger.warn("⚠️ Could not click Clave Única entry on attempt {}: {}", attempt, e.getMessage());
+                humanBehaviorService.pauseShort(page);
+            }
+        }
+
+        throw lastError != null ? lastError : new RuntimeException("Failed to click Clave Única entry");
+    }
+
+    private Frame waitForClaveUnicaLoginFrame(Page page, int timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        int attempts = 0;
+
+        while (System.currentTimeMillis() < deadline) {
+            attempts++;
+
+            try {
+                page.waitForSelector(
+                        CLAVE_UNICA_USER_SELECTOR,
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.VISIBLE)
+                                .setTimeout(1500)
+                );
+                logger.debug("🔐 Clave Única form found in main frame");
+                return page.mainFrame();
+            } catch (Exception ignored) {
+                // Keep probing child frames.
+            }
+
+            for (Frame frame : page.frames()) {
+                if (frame == page.mainFrame()) {
+                    continue;
+                }
+
+                try {
+                    frame.waitForSelector(
+                            CLAVE_UNICA_USER_SELECTOR,
+                            new Frame.WaitForSelectorOptions()
+                                    .setState(WaitForSelectorState.VISIBLE)
+                                    .setTimeout(800)
+                    );
+                    logger.debug("🔐 Clave Única form found in frame name='{}' url='{}'", frame.name(), frame.url());
+                    return frame;
+                } catch (Exception ignored) {
+                    // Probe next frame.
+                }
+            }
+
+            if (attempts % 5 == 0) {
+                logger.debug("🔐 Waiting for form... attempt={} | url={} | title={} | frames={}",
+                        attempts, page.url(), page.title(), page.frames().size());
+            }
+
+            page.waitForTimeout(500);
+        }
+
+        throw new RuntimeException("Clave Única form did not appear within " + timeoutMs + "ms");
     }
 
     /**
