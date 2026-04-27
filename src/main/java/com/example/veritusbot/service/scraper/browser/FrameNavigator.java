@@ -30,6 +30,13 @@ public class FrameNavigator {
      * @param page Current page
      */
     public void loginWithClaveUnica(Page page) {
+        // Intercept responses to detect non-200 status from Clave Única
+        page.onResponse(response -> {
+            if (response.url().contains("claveunica.gob.cl") && response.status() != 200) {
+                logger.error("🚨 Clave Única response: HTTP {} for URL: {}", response.status(), response.url());
+            }
+        });
+
         try {
             logger.debug("🔐 Hovering over 'Todos los servicios' button...");
             page.hover("button.dropbtn");
@@ -42,7 +49,7 @@ public class FrameNavigator {
                     .setTimeout(30000),
                 () -> page.click("a[onclick*='AutenticaCUnica']")
             );
-            logger.debug("🔐 Navigated to: {}", page.url());
+            logger.error("🔐 Navigated to: {} | Title: {}", page.url(), page.title());
             page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(30000));
 
             logger.debug("🔐 Waiting for Clave Única login form (URL: {})...", page.url());

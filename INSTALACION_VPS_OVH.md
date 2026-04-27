@@ -293,7 +293,7 @@ Aplicar override de logs:
 sudo mkdir -p /etc/systemd/system/veritusbot.service.d
 sudo tee /etc/systemd/system/veritusbot.service.d/logging.conf > /dev/null <<'EOF'
 [Service]
-Environment="JAVA_TOOL_OPTIONS=-Dlogging.level.root=INFO -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase1Scraper=DEBUG -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase2Scraper=DEBUG"
+Environment="JAVA_TOOL_OPTIONS=-Dlogging.level.root=INFO -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase1Scraper=DEBUG -Dlogging.level.com.example.veritusbot.service.scraper.phases.Phase2Scraper=DEBUG" -Dlogging.level.com.example.veritusbot.service.scraper.browser.FrameNavigator=DEBUG"
 EOF
 sudo systemctl daemon-reload
 sudo systemctl restart veritusbot
