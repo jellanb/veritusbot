@@ -2,6 +2,8 @@ package com.example.veritusbot.service.scraper.browser;
 
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.WaitUntilState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,11 +35,17 @@ public class FrameNavigator {
             page.hover("button.dropbtn");
             humanBehaviorService.pauseShort(page);
 
-            logger.debug("🔐 Clicking 'Clave Única'...");
-            page.click("a[onclick*='AutenticaCUnica']");
-            humanBehaviorService.waitForDomAndNetwork(page);
+            logger.debug("🔐 Clicking 'Clave Única' (URL: {})...", page.url());
+            page.waitForNavigation(
+                new Page.WaitForNavigationOptions()
+                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
+                    .setTimeout(30000),
+                () -> page.click("a[onclick*='AutenticaCUnica']")
+            );
+            logger.debug("🔐 Navigated to: {}", page.url());
+            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(30000));
 
-            logger.debug("🔐 Waiting for Clave Única login form...");
+            logger.debug("🔐 Waiting for Clave Única login form (URL: {})...", page.url());
             page.waitForSelector("#uname", new Page.WaitForSelectorOptions().setTimeout(60000));
             humanBehaviorService.pauseShort(page);
 
@@ -57,9 +65,15 @@ public class FrameNavigator {
             );
             humanBehaviorService.pauseShort(page);
 
-            logger.debug("🔐 Clicking INGRESA button...");
-            page.click("#login-submit");
-            humanBehaviorService.waitForDomAndNetwork(page);
+            logger.debug("🔐 Clicking INGRESA button (URL: {})...", page.url());
+            page.waitForNavigation(
+                new Page.WaitForNavigationOptions()
+                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
+                    .setTimeout(30000),
+                () -> page.click("#login-submit")
+            );
+            logger.debug("🔐 Post-login navigated to: {}", page.url());
+            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(30000));
 
             logger.debug("✓ Clave Única login submitted");
         } catch (Exception e) {
